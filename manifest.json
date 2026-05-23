@@ -4,7 +4,8 @@
   "version": "1.0.9",
   "description": "Shows date context on search results before you click.",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab"
   ],
   "host_permissions": [
     "https://nihquqccvnfuaqsxyymj.supabase.co/*"

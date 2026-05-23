@@ -11,15 +11,35 @@
   const RESULT_CACHE_KEY = 'userply_cache_v6_complete_ddg';
   const ANON_ID_KEY = 'userply_anon_id';
   const CACHE_TTL = 86400000;
+  const CONFIG_CACHE_KEY = 'userply_config_cache_v1';
+  const CONFIG_CACHE_TTL = 21600000;
 
   const SETTINGS_KEY = 'userply_settings';
+  const DEFAULT_SETTINGS = { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
+  let CURRENT_SETTINGS = { ...DEFAULT_SETTINGS };
 
   function getSettings() {
+    return CURRENT_SETTINGS;
+  }
+
+  function normalizeSettings(value) {
+    const merged = { ...DEFAULT_SETTINGS, ...(value && typeof value === 'object' ? value : {}) };
+    if (!Array.isArray(merged.disabledSites)) merged.disabledSites = [];
+    return merged;
+  }
+
+  async function loadSettings() {
+    try {
+      if (chrome && chrome.storage && chrome.storage.local) {
+        const data = await chrome.storage.local.get(SETTINGS_KEY);
+        CURRENT_SETTINGS = normalizeSettings(data ? data[SETTINGS_KEY] : null);
+        return;
+      }
+    } catch { }
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
-      if (!raw) return { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
-      return { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [], ...JSON.parse(raw) };
-    } catch { return { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] }; }
+      CURRENT_SETTINGS = raw ? normalizeSettings(JSON.parse(raw)) : { ...DEFAULT_SETTINGS };
+    } catch { CURRENT_SETTINGS = { ...DEFAULT_SETTINGS }; }
   }
 
   function isDisabledSite() {
@@ -105,9 +125,17 @@
     try { localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({ configs, ts: Date.now() })); } catch { }
   }
 
-  async function fetchRemoteConfig() { }
+  async function fetchRemoteConfig() {
+    const cached = getCachedConfig();
+    if (cached) applyRemoteConfig(cached);
+  }
 
-  function applyRemoteConfig(configs) { }
+  function applyRemoteConfig(configs) {
+    if (!configs || typeof configs !== 'object') return;
+    REMOTE_CONFIG = configs;
+    CONFIG_VERSION++;
+    setCachedConfig(configs);
+  }
 
   function getEngineConfig(engine) {
     if (REMOTE_CONFIG && REMOTE_CONFIG[engine]) return REMOTE_CONFIG[engine];
@@ -418,9 +446,6 @@
     if (!container || !titleEl || !url) return;
     if (PROCESSING.has(url) || PROCESSED_URLS.has(url) || PROCESSED_CONTAINERS.has(container)) return;
     PROCESSING.add(url);
-    PROCESSED_URLS.add(url);
-    PROCESSED_CONTAINERS.add(container);
-    container.setAttribute('data-userply-processed', '1');
     try {
       const claimed = getClaimedDate(container, url, engine);
       const claimedDate = claimed.iso;
@@ -446,8 +471,15 @@
         result._debugSource = result.actual_date || result.first_seen ? 'verification API' : (claimed.source || 'verification API');
         injectVerificationPill(titleEl, result, container);
       }
+      PROCESSED_URLS.add(url);
+      PROCESSED_CONTAINERS.add(container);
+      container.setAttribute('data-userply-processed', '1');
       repairFlippedSearchText();
-    } catch { const ph = container.querySelector('[data-userply-wrapper]'); if (ph) ph.remove(); }
+    } catch {
+      const ph = container.querySelector('[data-userply-wrapper]');
+      if (ph) ph.remove();
+      container.removeAttribute('data-userply-processed');
+    }
     finally { PROCESSING.delete(url); }
   }
 
@@ -663,6 +695,16 @@
   }
 
   async function boot() {
+    if (isDisabledSite()) return;
+    await loadSettings();
+    try {
+      if (chrome && chrome.storage && chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener((changes, areaName) => {
+          if (areaName !== 'local' || !changes || !changes[SETTINGS_KEY]) return;
+          CURRENT_SETTINGS = normalizeSettings(changes[SETTINGS_KEY].newValue);
+        });
+      }
+    } catch { }
     if (isDisabledSite()) return;
     await fetchRemoteConfig();
     if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(scan, 300);
