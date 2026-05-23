@@ -4,6 +4,7 @@
   const RESULT_CACHE_KEY = 'userply_cache_v6_complete_ddg';
   const LEGACY_RESULT_CACHE_KEY = 'userply_cache';
   const defaults = { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
+  let saveQueue = Promise.resolve();
   function normalize(settings) {
     const out = { ...defaults, ...(settings && typeof settings === 'object' ? settings : {}) };
     if (!Array.isArray(out.disabledSites)) out.disabledSites = [];
@@ -28,6 +29,7 @@
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized)); } catch { }
     showSaved();
   }
+  function queueSave(settings) { saveQueue = saveQueue.then(() => save(settings)).catch(() => save(settings)); return saveQueue; }
   function showSaved() { const msg = document.getElementById('saved-msg'); msg.classList.add('show'); setTimeout(function() { msg.classList.remove('show'); }, 1500); }
   function renderDisabledList(settings) {
     var list = document.getElementById('disabled-list');
@@ -35,7 +37,7 @@
     settings.disabledSites.forEach(function(site, i) {
       var li = document.createElement('li'); li.textContent = site;
       var btn = document.createElement('button'); btn.textContent = '\u00d7'; btn.setAttribute('aria-label', 'Remove ' + site);
-      btn.addEventListener('click', function() { settings.disabledSites.splice(i, 1); save(settings); renderDisabledList(settings); });
+      btn.addEventListener('click', function() { settings.disabledSites.splice(i, 1); queueSave(settings); renderDisabledList(settings); });
       li.appendChild(btn); list.appendChild(li);
     });
   }
@@ -45,13 +47,13 @@
     document.getElementById('pill-position').value = settings.pillPosition;
     document.getElementById('toggle-noarchive').checked = settings.showNoArchive;
     renderDisabledList(settings);
-    document.getElementById('toggle-enabled').addEventListener('change', function(e) { settings.enabled = e.target.checked; save(settings); });
-    document.getElementById('pill-position').addEventListener('change', function(e) { settings.pillPosition = e.target.value; save(settings); });
-    document.getElementById('toggle-noarchive').addEventListener('change', function(e) { settings.showNoArchive = e.target.checked; save(settings); });
+    document.getElementById('toggle-enabled').addEventListener('change', function(e) { settings.enabled = e.target.checked; queueSave(settings); });
+    document.getElementById('pill-position').addEventListener('change', function(e) { settings.pillPosition = e.target.value; queueSave(settings); });
+    document.getElementById('toggle-noarchive').addEventListener('change', function(e) { settings.showNoArchive = e.target.checked; queueSave(settings); });
     document.getElementById('add-site-btn').addEventListener('click', function() {
       const input = document.getElementById('new-site');
       const site = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-      if (site && !settings.disabledSites.includes(site)) { settings.disabledSites.push(site); save(settings); renderDisabledList(settings); input.value = ''; }
+      if (site && !settings.disabledSites.includes(site)) { settings.disabledSites.push(site); queueSave(settings); renderDisabledList(settings); input.value = ''; }
     });
     document.getElementById('new-site').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('add-site-btn').click(); });
     document.getElementById('clear-cache').addEventListener('click', function() {
