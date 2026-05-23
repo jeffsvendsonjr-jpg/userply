@@ -697,7 +697,6 @@
   }
 
   async function boot() {
-    if (isDisabledSite()) return;
     await loadSettings();
     try {
       if (chrome && chrome.storage && chrome.storage.onChanged) {

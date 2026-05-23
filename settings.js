@@ -5,7 +5,7 @@
   const LEGACY_RESULT_CACHE_KEY = 'userply_cache';
   const defaults = { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
   function normalize(settings) {
-    var out = { ...defaults, ...(settings && typeof settings === 'object' ? settings : {}) };
+    const out = { ...defaults, ...(settings && typeof settings === 'object' ? settings : {}) };
     if (!Array.isArray(out.disabledSites)) out.disabledSites = [];
     return out;
   }
@@ -49,8 +49,8 @@
     document.getElementById('pill-position').addEventListener('change', function(e) { settings.pillPosition = e.target.value; save(settings); });
     document.getElementById('toggle-noarchive').addEventListener('change', function(e) { settings.showNoArchive = e.target.checked; save(settings); });
     document.getElementById('add-site-btn').addEventListener('click', function() {
-      var input = document.getElementById('new-site');
-      var site = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      const input = document.getElementById('new-site');
+      const site = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
       if (site && !settings.disabledSites.includes(site)) { settings.disabledSites.push(site); save(settings); renderDisabledList(settings); input.value = ''; }
     });
     document.getElementById('new-site').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('add-site-btn').click(); });
