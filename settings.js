@@ -29,7 +29,7 @@
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized)); } catch { }
     showSaved();
   }
-  function queueSave(settings) { saveQueue = saveQueue.then(() => save(settings)).catch(() => save(settings)); return saveQueue; }
+  function queueSave(settings) { saveQueue = saveQueue.catch(() => {}).then(() => save(settings)).catch(() => {}); return saveQueue; }
   function showSaved() { const msg = document.getElementById('saved-msg'); msg.classList.add('show'); setTimeout(function() { msg.classList.remove('show'); }, 1500); }
   function renderDisabledList(settings) {
     var list = document.getElementById('disabled-list');
