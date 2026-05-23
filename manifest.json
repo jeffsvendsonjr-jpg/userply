@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "userp.ly \u2014 Reality Partitioner",
+  "version": "1.0.9",
+  "description": "Shows date context on search results before you click.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://nihquqccvnfuaqsxyymj.supabase.co/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/*",
+        "https://google.com/*",
+        "https://www.google.co.uk/*",
+        "https://www.google.ca/*",
+        "https://www.google.com.au/*",
+        "https://www.google.co.in/*",
+        "https://www.google.de/*",
+        "https://www.google.fr/*",
+        "https://www.google.co.jp/*",
+        "https://www.google.es/*",
+        "https://www.google.com.br/*",
+        "https://www.google.it/*",
+        "https://www.google.com.mx/*",
+        "https://www.google.nl/*",
+        "https://www.google.pl/*",
+        "https://www.bing.com/*",
+        "https://bing.com/*",
+        "https://duckduckgo.com/*",
+        "https://www.duckduckgo.com/*",
+        "https://html.duckduckgo.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  }
+}
