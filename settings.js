@@ -1,6 +1,8 @@
 (function() {
   'use strict';
   const SETTINGS_KEY = 'userply_settings';
+  const RESULT_CACHE_KEY = 'userply_cache_v6_complete_ddg';
+  const LEGACY_RESULT_CACHE_KEY = 'userply_cache';
   const defaults = { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
   function normalize(settings) {
     var out = { ...defaults, ...(settings && typeof settings === 'object' ? settings : {}) };
@@ -53,8 +55,8 @@
     });
     document.getElementById('new-site').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('add-site-btn').click(); });
     document.getElementById('clear-cache').addEventListener('click', function() {
-      localStorage.removeItem('userply_cache_v6_complete_ddg');
-      localStorage.removeItem('userply_cache');
+      localStorage.removeItem(RESULT_CACHE_KEY);
+      localStorage.removeItem(LEGACY_RESULT_CACHE_KEY);
       showSaved();
     });
   })();

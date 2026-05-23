@@ -478,6 +478,8 @@
     } catch {
       const ph = container.querySelector('[data-userply-wrapper]');
       if (ph) ph.remove();
+      PROCESSED_URLS.delete(url);
+      PROCESSED_CONTAINERS.delete(container);
       container.removeAttribute('data-userply-processed');
     }
     finally { PROCESSING.delete(url); }
