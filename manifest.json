@@ -4,10 +4,12 @@
   "version": "1.0.9",
   "description": "Shows date context on search results before you click.",
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
-    "https://nihquqccvnfuaqsxyymj.supabase.co/*"
+    "https://nihquqccvnfuaqsxyymj.supabase.co/*",
+    "https://public-website-builder.replit.app/*"
   ],
   "action": {
     "default_popup": "popup.html",

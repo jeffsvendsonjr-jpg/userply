@@ -13,6 +13,7 @@
     .header h1 { font-size: 18px; font-weight: 700; color: #fff; }
     .section { background: rgba(148,163,184,0.04); border: 1px solid rgba(148,163,184,0.1); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .section-title { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+    .section-note { font-size: 12px; color: #64748b; margin-bottom: 12px; }
     .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(148,163,184,0.06); }
     .setting-row:last-child { border-bottom: none; }
     .setting-label { font-size: 13px; color: #e2e8f0; font-weight: 500; }
@@ -35,6 +36,12 @@
     .add-site button:hover { background: #16a34a; }
     .saved-msg { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .saved-msg.show { opacity: 1; }
+    .license-row { display: flex; gap: 8px; }
+    .license-row input { flex: 1; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 8px 10px; font-size: 12px; outline: none; text-transform: uppercase; }
+    .license-row input:focus { border-color: #4ade80; }
+    .license-row button { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .license-row button:hover { background: #16a34a; }
+    .license-status { margin-top: 10px; font-size: 12px; color: #94a3b8; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -51,9 +58,18 @@
     </div>
     <div class="section">
       <div class="section-title">Disabled Sites</div>
-      <p style="font-size:12px;color:#64748b;margin-bottom:12px;">The extension will not run on these domains.</p>
+      <p class="section-note">The extension will not run on these domains.</p>
       <ul class="disabled-site-list" id="disabled-list"></ul>
       <div class="add-site"><input type="text" id="new-site" placeholder="e.g. reddit.com"><button id="add-site-btn">Add</button></div>
+    </div>
+    <div class="section">
+      <div class="section-title">License</div>
+      <p class="section-note">Enter your Pro key to unlock Newest and Oldest sorting.</p>
+      <div class="license-row">
+        <input type="text" id="license-key" placeholder="USERPLY-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+        <button id="license-save-btn">Save & Verify</button>
+      </div>
+      <div class="license-status" id="license-status">Plan: Free</div>
     </div>
     <div class="section">
       <div class="section-title">Data</div>
