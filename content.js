@@ -13,6 +13,7 @@
   const CACHE_TTL = 86400000;
 
   const SETTINGS_KEY = 'userply_settings';
+  const LICENSE_STATUS_STORAGE_KEY = 'userply_license_status';
 
   function getSettings() {
     try {
@@ -27,6 +28,24 @@
     if (!settings.enabled) return true;
     const hostname = window.location.hostname.replace(/^www\./, '');
     return settings.disabledSites.some(s => hostname === s || hostname.endsWith('.' + s));
+  }
+
+  let DATE_SORT_ENABLED = false;
+
+  function loadDateSortAccess() {
+    return new Promise((resolve) => {
+      try {
+        if (!chrome || !chrome.storage || !chrome.storage.local) return resolve(false);
+        chrome.storage.local.get([LICENSE_STATUS_STORAGE_KEY], (store) => {
+          const status = store ? store[LICENSE_STATUS_STORAGE_KEY] : null;
+          DATE_SORT_ENABLED = !!(status && status.valid === true && status.features && status.features.dateSort === true);
+          resolve(DATE_SORT_ENABLED);
+        });
+      } catch {
+        DATE_SORT_ENABLED = false;
+        resolve(false);
+      }
+    });
   }
 
   let REMOTE_CONFIG = null;
@@ -570,7 +589,7 @@
     return results;
   }
 
-  let SORT_STATE = 'default';
+  let SORT_STATE = 'normal';
   let ORIGINAL_ORDER = null;
 
   function getSearchContainer() {
@@ -634,9 +653,107 @@
     return ORIGINAL_ORDER;
   }
 
-  function applySortOrder() { }
+  function updateSortUi() {
+    const root = document.getElementById('userply-sort');
+    if (!root) return;
+    const normalBtn = root.querySelector('[data-userply-sort-btn="normal"]');
+    const newestBtn = root.querySelector('[data-userply-sort-btn="newest"]');
+    const oldestBtn = root.querySelector('[data-userply-sort-btn="oldest"]');
+    if (normalBtn) normalBtn.style.background = SORT_STATE === 'normal' ? '#334155' : 'transparent';
+    if (newestBtn) newestBtn.style.background = SORT_STATE === 'newest' ? '#334155' : 'transparent';
+    if (oldestBtn) oldestBtn.style.background = SORT_STATE === 'oldest' ? '#334155' : 'transparent';
+    if (newestBtn) {
+      newestBtn.disabled = !DATE_SORT_ENABLED;
+      newestBtn.style.opacity = DATE_SORT_ENABLED ? '1' : '0.55';
+      newestBtn.title = DATE_SORT_ENABLED ? '' : 'Pro required';
+      newestBtn.style.cursor = DATE_SORT_ENABLED ? 'pointer' : 'not-allowed';
+    }
+    if (oldestBtn) {
+      oldestBtn.disabled = !DATE_SORT_ENABLED;
+      oldestBtn.style.opacity = DATE_SORT_ENABLED ? '1' : '0.55';
+      oldestBtn.title = DATE_SORT_ENABLED ? '' : 'Pro required';
+      oldestBtn.style.cursor = DATE_SORT_ENABLED ? 'pointer' : 'not-allowed';
+    }
+  }
 
-  function injectSortButton() { }
+  function applySortOrder() {
+    const container = getSearchContainer();
+    if (!container) return;
+    const children = getSortableChildren(container);
+    if (!children.length) return;
+    const original = syncOriginalOrder(children);
+
+    if (SORT_STATE === 'normal') {
+      original.forEach((el) => {
+        if (el.parentElement === container) container.appendChild(el);
+      });
+      return;
+    }
+
+    if (!DATE_SORT_ENABLED) {
+      SORT_STATE = 'normal';
+      updateSortUi();
+      original.forEach((el) => {
+        if (el.parentElement === container) container.appendChild(el);
+      });
+      return;
+    }
+
+    const ranked = children.map((el, index) => {
+      const d = parsePillDate(el);
+      return { el, index, ts: d ? d.getTime() : null };
+    });
+
+    ranked.sort((a, b) => {
+      if (a.ts === null && b.ts === null) return a.index - b.index;
+      if (a.ts === null) return 1;
+      if (b.ts === null) return -1;
+      if (SORT_STATE === 'oldest') return a.ts - b.ts;
+      return b.ts - a.ts;
+    });
+
+    ranked.forEach((entry) => {
+      if (entry.el.parentElement === container) container.appendChild(entry.el);
+    });
+  }
+
+  function createSortButton(label, mode) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('data-userply-sort-btn', mode);
+    btn.textContent = label;
+    btn.style.cssText = 'border:1px solid rgba(148,163,184,0.2);background:transparent;color:#cbd5e1;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;';
+    btn.addEventListener('click', () => {
+      if ((mode === 'newest' || mode === 'oldest') && !DATE_SORT_ENABLED) return;
+      SORT_STATE = mode;
+      updateSortUi();
+      applySortOrder();
+    });
+    return btn;
+  }
+
+  function injectSortButton() {
+    if (detectEngine() !== 'google') return;
+    const container = getSearchContainer();
+    if (!container) return;
+
+    let root = document.getElementById('userply-sort');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'userply-sort';
+      root.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px 0;padding:2px 0;';
+      root.appendChild(createSortButton('Normal', 'normal'));
+      root.appendChild(createSortButton('Newest', 'newest'));
+      root.appendChild(createSortButton('Oldest', 'oldest'));
+      container.insertBefore(root, container.firstChild || null);
+    } else if (root.parentElement !== container) {
+      container.insertBefore(root, container.firstChild || null);
+    }
+
+    if (!DATE_SORT_ENABLED && SORT_STATE !== 'normal') SORT_STATE = 'normal';
+    updateSortUi();
+    applySortOrder();
+  }
 
   function injectStyles() {
     if (document.getElementById('userply-styles')) return;
@@ -664,6 +781,18 @@
 
   async function boot() {
     if (isDisabledSite()) return;
+    await loadDateSortAccess();
+    try {
+      if (chrome && chrome.storage && chrome.storage.onChanged) {
+        chrome.storage.onChanged.addListener((changes, area) => {
+          if (area !== 'local' || !changes[LICENSE_STATUS_STORAGE_KEY]) return;
+          const next = changes[LICENSE_STATUS_STORAGE_KEY].newValue;
+          DATE_SORT_ENABLED = !!(next && next.valid === true && next.features && next.features.dateSort === true);
+          if (!DATE_SORT_ENABLED && SORT_STATE !== 'normal') SORT_STATE = 'normal';
+          injectSortButton();
+        });
+      }
+    } catch { }
     await fetchRemoteConfig();
     if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(scan, 300);
     else document.addEventListener('DOMContentLoaded', () => setTimeout(scan, 300));
@@ -677,7 +806,7 @@
       lastHref = location.href;
       PROCESSING.clear();
       scanCount = 0;
-      SORT_STATE = 'default';
+      SORT_STATE = 'normal';
       ORIGINAL_ORDER = null;
       document.getElementById('userply-sort')?.remove();
       setTimeout(scan, 200);
