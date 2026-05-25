@@ -589,7 +589,10 @@
     return results;
   }
 
-  let SORT_STATE = 'normal';
+  const SORT_MODE_NORMAL = 'normal';
+  const SORT_MODE_NEWEST = 'newest';
+  const SORT_MODE_OLDEST = 'oldest';
+  let SORT_STATE = SORT_MODE_NORMAL;
   let ORIGINAL_ORDER = null;
 
   function getSearchContainer() {
@@ -653,15 +656,20 @@
     return ORIGINAL_ORDER;
   }
 
+  function enforceSortAccess() {
+    if (DATE_SORT_ENABLED) return;
+    if (SORT_STATE !== SORT_MODE_NORMAL) SORT_STATE = SORT_MODE_NORMAL;
+  }
+
   function updateSortUi() {
     const root = document.getElementById('userply-sort');
     if (!root) return;
     const normalBtn = root.querySelector('[data-userply-sort-btn="normal"]');
     const newestBtn = root.querySelector('[data-userply-sort-btn="newest"]');
     const oldestBtn = root.querySelector('[data-userply-sort-btn="oldest"]');
-    if (normalBtn) normalBtn.style.background = SORT_STATE === 'normal' ? '#334155' : 'transparent';
-    if (newestBtn) newestBtn.style.background = SORT_STATE === 'newest' ? '#334155' : 'transparent';
-    if (oldestBtn) oldestBtn.style.background = SORT_STATE === 'oldest' ? '#334155' : 'transparent';
+    if (normalBtn) normalBtn.style.background = SORT_STATE === SORT_MODE_NORMAL ? '#334155' : 'transparent';
+    if (newestBtn) newestBtn.style.background = SORT_STATE === SORT_MODE_NEWEST ? '#334155' : 'transparent';
+    if (oldestBtn) oldestBtn.style.background = SORT_STATE === SORT_MODE_OLDEST ? '#334155' : 'transparent';
     if (newestBtn) {
       newestBtn.disabled = !DATE_SORT_ENABLED;
       newestBtn.style.opacity = DATE_SORT_ENABLED ? '1' : '0.55';
@@ -683,7 +691,7 @@
     if (!children.length) return;
     const original = syncOriginalOrder(children);
 
-    if (SORT_STATE === 'normal') {
+    if (SORT_STATE === SORT_MODE_NORMAL) {
       original.forEach((el) => {
         if (el.parentElement === container) container.appendChild(el);
       });
@@ -691,7 +699,7 @@
     }
 
     if (!DATE_SORT_ENABLED) {
-      SORT_STATE = 'normal';
+      enforceSortAccess();
       updateSortUi();
       original.forEach((el) => {
         if (el.parentElement === container) container.appendChild(el);
@@ -708,7 +716,7 @@
       if (a.ts === null && b.ts === null) return a.index - b.index;
       if (a.ts === null) return 1;
       if (b.ts === null) return -1;
-      if (SORT_STATE === 'oldest') return a.ts - b.ts;
+      if (SORT_STATE === SORT_MODE_OLDEST) return a.ts - b.ts;
       return b.ts - a.ts;
     });
 
@@ -724,7 +732,7 @@
     btn.textContent = label;
     btn.style.cssText = 'border:1px solid rgba(148,163,184,0.2);background:transparent;color:#cbd5e1;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;';
     btn.addEventListener('click', () => {
-      if ((mode === 'newest' || mode === 'oldest') && !DATE_SORT_ENABLED) return;
+      if ((mode === SORT_MODE_NEWEST || mode === SORT_MODE_OLDEST) && !DATE_SORT_ENABLED) return;
       SORT_STATE = mode;
       updateSortUi();
       applySortOrder();
@@ -742,15 +750,15 @@
       root = document.createElement('div');
       root.id = 'userply-sort';
       root.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px 0;padding:2px 0;';
-      root.appendChild(createSortButton('Normal', 'normal'));
-      root.appendChild(createSortButton('Newest', 'newest'));
-      root.appendChild(createSortButton('Oldest', 'oldest'));
+      root.appendChild(createSortButton('Normal', SORT_MODE_NORMAL));
+      root.appendChild(createSortButton('Newest', SORT_MODE_NEWEST));
+      root.appendChild(createSortButton('Oldest', SORT_MODE_OLDEST));
       container.insertBefore(root, container.firstChild || null);
     } else if (root.parentElement !== container) {
       container.insertBefore(root, container.firstChild || null);
     }
 
-    if (!DATE_SORT_ENABLED && SORT_STATE !== 'normal') SORT_STATE = 'normal';
+    enforceSortAccess();
     updateSortUi();
     applySortOrder();
   }
@@ -788,7 +796,7 @@
           if (area !== 'local' || !changes[LICENSE_STATUS_STORAGE_KEY]) return;
           const next = changes[LICENSE_STATUS_STORAGE_KEY].newValue;
           DATE_SORT_ENABLED = !!(next && next.valid === true && next.features && next.features.dateSort === true);
-          if (!DATE_SORT_ENABLED && SORT_STATE !== 'normal') SORT_STATE = 'normal';
+          enforceSortAccess();
           injectSortButton();
         });
       }
@@ -806,7 +814,7 @@
       lastHref = location.href;
       PROCESSING.clear();
       scanCount = 0;
-      SORT_STATE = 'normal';
+      SORT_STATE = SORT_MODE_NORMAL;
       ORIGINAL_ORDER = null;
       document.getElementById('userply-sort')?.remove();
       setTimeout(scan, 200);
