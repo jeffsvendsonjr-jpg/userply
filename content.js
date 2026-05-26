@@ -2,13 +2,13 @@
   'use strict';
 
   const SUPABASE_URL = 'https://nihquqccvnfuaqsxyymj.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5paHF1cWNjdm5mdWFxc3h5eW1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjQ1ODIsImV4cCI6MjA5NDY0MDU4Mn0.Q0ea1N8iWDoy0KzbFvL4rFYg0liZevnC3AFUDiJY1yE';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5paHF1cWNjdm5mdWFxc3h5eW1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjQ1ODIsImV4cCI6MjA5NDY0MDU4Mn0.Q0e[...]';
   const VERIFY_URL = `${SUPABASE_URL}/functions/v1/verify-date`;
 
   const PROCESSING = new Set();
   const PROCESSED_URLS = new Set();
   const PROCESSED_CONTAINERS = new WeakSet();
-  const RESULT_CACHE_KEY = 'userply_cache_v6_complete_ddg';
+  const RESULT_CACHE_KEY = 'userply_cache_v7_google_launch';
   const ANON_ID_KEY = 'userply_anon_id';
   const CACHE_TTL = 86400000;
 
@@ -30,36 +30,15 @@
   }
 
   let REMOTE_CONFIG = null;
-  let CONFIG_VERSION = 0;
 
   const FALLBACK_CONFIG = {
     google: {
       strategies: [
-        // Google only: use true result headings. Do not use cite/breadcrumb nodes;
-        // those can live inside transformed internal wrappers and create mirrored badges.
         { name: 'google-heading-only', titleSelector: '#rso a[href] h3, #search a[href] h3', linkResolver: 'closest_anchor', containerSelector: '.MjjYud, .g, div[data-sokoban-container], div' },
       ],
       snippetSelectors: ['.VwiC3b', '.s3v9rd', '.IsZvec', '.yDYNvb', '.MUxGbd', '.r025kc'],
       searchContainer: '#rso, #search > div > div',
-    },
-    bing: {
-      strategies: [
-        { name: 'algo-h2', titleSelector: '.b_algo h2', linkSelector: 'a[href^="http"]', containerSelector: '.b_algo' },
-      ],
-      snippetSelectors: ['.b_caption p'],
-      searchContainer: '#b_results',
-    },
-    duckduckgo: {
-      strategies: [
-        // DuckDuckGo has multiple live layouts. Prefer explicit result title
-        // anchors first, then fall back to classic result headings.
-        { name: 'ddg-testid-title', titleSelector: 'a[data-testid="result-title-a"], [data-testid="result-title-a"] a[href]', linkResolver: 'self_or_closest_anchor', containerSelector: 'article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result' },
-        { name: 'ddg-result-title', titleSelector: '.result__title a[href], a.result__a[href], h2 a[href], h3 a[href]', linkResolver: 'self_or_closest_anchor', containerSelector: 'article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result' },
-        { name: 'ddg-heading-fallback', titleSelector: 'article h2, article h3, li h2, li h3, .result h2, .result h3', linkSelector: 'a[href]', containerSelector: 'article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result' },
-      ],
-      snippetSelectors: ['[data-testid="result-snippet"]', '[data-testid*="snippet"]', '.result__snippet', '.result__snippet.js-result-snippet', '[data-result="snippet"]', 'article span', 'article p'],
-      searchContainer: '#links, .results, [data-testid="mainline"], main',
-    },
+    }
   };
 
   function trackEvent(eventType, metadata = {}) { }
@@ -69,8 +48,6 @@
     if (!id) { id = 'anon_' + crypto.randomUUID(); localStorage.setItem(ANON_ID_KEY, id); }
     return id;
   }
-
-  function today() { return new Date().toISOString().split('T')[0]; }
 
   function cacheGet(url) {
     try {
@@ -91,23 +68,7 @@
     } catch { }
   }
 
-  function getCachedConfig() {
-    try {
-      const raw = localStorage.getItem(CONFIG_CACHE_KEY);
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      if (Date.now() - data.ts > CONFIG_CACHE_TTL) return null;
-      return data.configs;
-    } catch { return null; }
-  }
-
-  function setCachedConfig(configs) {
-    try { localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({ configs, ts: Date.now() })); } catch { }
-  }
-
   async function fetchRemoteConfig() { }
-
-  function applyRemoteConfig(configs) { }
 
   function getEngineConfig(engine) {
     if (REMOTE_CONFIG && REMOTE_CONFIG[engine]) return REMOTE_CONFIG[engine];
@@ -151,7 +112,7 @@
     const shadow = host.attachShadow({ mode: 'closed' });
     const { bg, color, border } = getPillColors(status);
     const style = document.createElement('style');
-    style.textContent = `:host{all:initial;display:inline-block!important;vertical-align:middle!important;transform:none!important;direction:ltr!important;writing-mode:horizontal-tb!important;unicode-bidi:isolate!important;text-orientation:mixed!important;rotate:none!important;scale:none!important;}.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;background:${bg};color:${color};border:1px solid ${border};font-size:10.5px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;white-space:nowrap;line-height:1.7;letter-spacing:0.01em;direction:ltr;writing-mode:horizontal-tb;${clickUrl?'cursor:pointer;':''}transition:outline 0.1s ease;}.pill:focus-visible{outline:2px solid ${color};outline-offset:2px;}.dot{width:5px;height:5px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0;}`;
+    style.textContent = `:host{all:initial;display:inline-block!important;vertical-align:middle!important;transform:none!important;direction:ltr!important;writing-mode:horizontal-tb!important;unicode-bidi:isolate!important}.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font:600 10.5px/1.7 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:${bg};color:${color};border:1px solid ${border};white-space:nowrap;cursor:${clickUrl ? 'pointer' : 'default'};user-select:none}.dot{width:5px;height:5px;border-radius:50%;background:${color};display:inline-block}`;
     shadow.appendChild(style);
     const pill = document.createElement('span');
     pill.className = 'pill';
@@ -228,25 +189,26 @@
     const todayish = TODAY_RE.exec(text);
     if (todayish) { const d = new Date(); if (todayish[1].toLowerCase() === 'yesterday') d.setDate(d.getDate() - 1); return d.toISOString(); }
     const rel = REL_DATE_RE.exec(text);
-    if (rel) { const msMap = { second: 1000, minute: 60000, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 }; const ms = msMap[rel[2].toLowerCase()]; if (ms) return new Date(Date.now() - parseInt(rel[1], 10) * ms).toISOString(); }
+    if (rel) {
+      const msMap = { second: 1000, minute: 60000, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 };
+      const ms = msMap[rel[2].toLowerCase()];
+      if (ms) return new Date(Date.now() - Number(rel[1]) * ms).toISOString();
+    }
     return null;
   }
 
-  function extractSnippetDate(container, engine) {
-    const config = getEngineConfig(engine);
+  function extractSnippetDate(container) {
+    const config = getEngineConfig('google');
     const selectors = config ? config.snippetSelectors : ['.VwiC3b', '.s3v9rd', '.IsZvec', '.yDYNvb', '.MUxGbd', '.r025kc'];
     for (const sel of selectors) { try { const el = container.querySelector(sel); if (el) { const iso = extractTextDate(el.textContent); if (iso) return iso; } } catch { } }
     return extractTextDate(container.textContent);
   }
 
-  function getClaimedDate(container, url, engine) {
+  function getClaimedDate(container, url) {
     const urlDate = extractUrlDate(url);
     if (urlDate) return { iso: urlDate, source: 'URL date' };
-    const visibleDate = extractSnippetDate(container, engine);
-    if (visibleDate) {
-      const label = engine === 'bing' ? 'Bing visible date' : engine === 'duckduckgo' ? 'DuckDuckGo visible date' : 'Google visible date';
-      return { iso: visibleDate, source: label };
-    }
+    const visibleDate = extractSnippetDate(container);
+    if (visibleDate) return { iso: visibleDate, source: 'Google visible date' };
     return { iso: null, source: null };
   }
 
@@ -318,44 +280,15 @@
     });
   }
 
-  function neutralizeAncestorTransforms(el) {
-    // Intentionally no-op. The extension must never alter Google/Bing/DDG
-    // result ancestors, because search pages sometimes use transforms for
-    // layout. Touch only userp.ly's own injected nodes.
-  }
-
   function placeBadgeWrapper(container, titleEl, wrapper) {
-    const engine = detectEngine();
-
-    // Google's title/URL crumbs can sit inside internal transformed wrappers.
-    // Putting our badge next to the anchor can inherit those transforms and mirror the badge.
-    // For Google, anchor the badge only at the safe top-level result block.
-    if (engine === 'google' && container) {
-      const rso = document.querySelector('#rso') || document.querySelector('#search');
-      const safeContainer = container.closest('.MjjYud, .g, div[data-sokoban-container]') || container;
-      if (!rso || rso.contains(safeContainer)) {
-        safeContainer.querySelectorAll(':scope > [data-userply-wrapper]').forEach(el => el.remove());
-        wrapper.style.display = 'block';
-        wrapper.style.width = 'max-content';
-        wrapper.style.margin = '0 0 4px 0';
-        safeContainer.insertBefore(wrapper, safeContainer.firstChild || null);
-        return;
-      }
-    }
-
-    if ((engine === 'duckduckgo' || engine === 'bing') && container) {
-      const existing = container.querySelector(':scope > [data-userply-wrapper]');
-      if (existing) existing.remove();
+    const rso = document.querySelector('#rso') || document.querySelector('#search');
+    const safeContainer = container.closest('.MjjYud, .g, div[data-sokoban-container]') || container;
+    if (!rso || rso.contains(safeContainer)) {
+      safeContainer.querySelectorAll(':scope > [data-userply-wrapper]').forEach(el => el.remove());
       wrapper.style.display = 'block';
       wrapper.style.width = 'max-content';
       wrapper.style.margin = '0 0 4px 0';
-      const heading = container.querySelector('h2, h3, [data-testid="result-title-a"], .result__title') || titleEl;
-      const headingRow = heading && heading.parentElement ? heading.parentElement : null;
-      if (headingRow && container.contains(headingRow)) {
-        headingRow.insertBefore(wrapper, heading.nextSibling || null);
-      } else {
-        container.insertBefore(wrapper, container.firstChild || null);
-      }
+      safeContainer.insertBefore(wrapper, safeContainer.firstChild || null);
       return;
     }
 
@@ -394,7 +327,7 @@
     const isInline = settings.pillPosition === 'inline';
     const wrapper = document.createElement(isInline ? 'span' : 'div');
     wrapper.setAttribute('data-userply-wrapper', '1');
-    wrapper.style.cssText = [isInline ? 'display:inline;margin-left:6px' : 'display:block;margin:4px 0 0 0', 'padding:0', 'transform:none !important', 'direction:ltr !important', 'unicode-bidi:isolate !important', 'writing-mode:horizontal-tb !important', 'position:relative', 'z-index:1', 'rotate:none !important', 'scale:none !important', 'contain:layout style', 'isolation:isolate', 'text-align:left'].join(';');
+    wrapper.style.cssText = [isInline ? 'display:inline;margin-left:6px' : 'display:block;margin:4px 0 0 0', 'padding:0', 'transform:none !important', 'direction:ltr !important', 'unicode-bidi:isolate !important'].join(';');
     wrapper.appendChild(pill);
     placeBadgeWrapper(container, titleEl, wrapper);
   }
@@ -409,12 +342,12 @@
     const isInline = settings.pillPosition === 'inline';
     const wrapper = document.createElement(isInline ? 'span' : 'div');
     wrapper.setAttribute('data-userply-wrapper', '1');
-    wrapper.style.cssText = [isInline ? 'display:inline;margin-left:6px' : 'display:block;margin:4px 0 0 0', 'padding:0', 'transform:none !important', 'direction:ltr !important', 'unicode-bidi:isolate !important', 'writing-mode:horizontal-tb !important', 'position:relative', 'z-index:1', 'rotate:none !important', 'scale:none !important', 'contain:layout style', 'isolation:isolate', 'text-align:left'].join(';');
+    wrapper.style.cssText = [isInline ? 'display:inline;margin-left:6px' : 'display:block;margin:4px 0 0 0', 'padding:0', 'transform:none !important', 'direction:ltr !important', 'unicode-bidi:isolate !important'].join(';');
     wrapper.appendChild(pill);
     placeBadgeWrapper(container, titleEl, wrapper);
   }
 
-  async function processResult(container, titleEl, url, engine) {
+  async function processResult(container, titleEl, url) {
     if (!container || !titleEl || !url) return;
     if (PROCESSING.has(url) || PROCESSED_URLS.has(url) || PROCESSED_CONTAINERS.has(container)) return;
     PROCESSING.add(url);
@@ -422,11 +355,11 @@
     PROCESSED_CONTAINERS.add(container);
     container.setAttribute('data-userply-processed', '1');
     try {
-      const claimed = getClaimedDate(container, url, engine);
+      const claimed = getClaimedDate(container, url);
       const claimedDate = claimed.iso;
       const placeholderWrapper = document.createElement('div');
       placeholderWrapper.setAttribute('data-userply-wrapper', '1');
-      placeholderWrapper.style.cssText = 'display:block;width:max-content;margin:4px 0 0 0;transform:none!important;rotate:0deg!important;scale:1!important;direction:ltr!important;unicode-bidi:isolate!important;writing-mode:horizontal-tb!important;text-align:left!important;isolation:isolate!important;';
+      placeholderWrapper.style.cssText = 'display:block;width:max-content;margin:4px 0 0 0;transform:none!important;rotate:0deg!important;scale:1!important;direction:ltr!important;unicode-bidi:isolate!important;';
       const placeholder = document.createElement('span');
       placeholder.setAttribute('data-userply', '1');
       placeholder.style.cssText = 'display:inline-block;width:80px;height:14px;border-radius:10px;background:rgba(148,163,184,0.15);animation:userply-pulse 1.4s ease-in-out infinite;';
@@ -451,42 +384,24 @@
     finally { PROCESSING.delete(url); }
   }
 
-  const BLOCKED_RE = /^(www\.)?(google\.|youtube\.|gstatic\.|googleusercontent\.|googleapis\.|googlesyndication\.|doubleclick\.|bing\.|microsoft\.|duckduckgo\.)/i;
-  function isBlockedHostname(hostname) { if (!hostname) return true; if (BLOCKED_RE.test(hostname)) return true; if (hostname.endsWith('.google.com') || hostname === 'google.com') return true; return false; }
-  function decodeBingRedirectValue(value) {
-    if (!value) return null;
-    try {
-      let v = value;
-      // Bing commonly stores the destination in a URL-safe base64-ish `u` param,
-      // often prefixed with `a1`. Decode it before hostname filtering so real
-      // Bing results are not mistaken for internal bing.com links.
-      if (v.startsWith('a1')) v = v.slice(2);
-      v = v.replace(/-/g, '+').replace(/_/g, '/');
-      while (v.length % 4) v += '=';
-      const decoded = atob(v);
-      if (decoded && (decoded.startsWith('http://') || decoded.startsWith('https://'))) return decoded;
-    } catch { }
-    try {
-      const decoded = decodeURIComponent(value);
-      if (decoded && (decoded.startsWith('http://') || decoded.startsWith('https://'))) return decoded;
-    } catch { }
-    return null;
+  const BLOCKED_RE = /^(www\.)?(google\.|youtube\.|gstatic\.|googleusercontent\.|googleapis\.|googlesyndication\.|doubleclick\.)/i;
+  function isBlockedHostname(hostname) {
+    if (!hostname) return true;
+    if (BLOCKED_RE.test(hostname)) return true;
+    if (hostname.endsWith('.google.com') || hostname === 'google.com') return true;
+    return false;
   }
 
   function resolveUrl(href) {
     try {
       const u = new URL(href, location.href);
-      const direct = u.searchParams.get('uddg') || u.searchParams.get('q') || u.searchParams.get('url');
+      const direct = u.searchParams.get('url');
       if (direct) {
         try {
           const decodedDirect = decodeURIComponent(direct);
           if (decodedDirect.startsWith('http://') || decodedDirect.startsWith('https://')) return decodedDirect;
         } catch { }
         if (direct.startsWith('http://') || direct.startsWith('https://')) return direct;
-      }
-      if (/bing\.com$/i.test(u.hostname) || /\.bing\.com$/i.test(u.hostname)) {
-        const decoded = decodeBingRedirectValue(u.searchParams.get('u')) || decodeBingRedirectValue(u.searchParams.get('r'));
-        if (decoded) return decoded;
       }
     } catch { }
     return href;
@@ -501,29 +416,21 @@
     } catch { return resolveUrl(href); }
   }
 
-  function detectEngine() { const host = window.location.hostname; if (/google\./i.test(host)) return 'google'; if (/bing\./i.test(host)) return 'bing'; if (/duckduckgo\./i.test(host)) return 'duckduckgo'; return null; }
-
+  function detectEngine() {
+    const host = window.location.hostname;
+    if (/google\./i.test(host)) return 'google';
+    return null;
+  }
 
   function repairFlippedSearchText() { }
 
   function findSafeResultContainer(el, link, strategy) {
-    const engine = detectEngine();
-    if (engine === 'google') {
-      const rso = document.querySelector('#rso') || document.querySelector('#search');
-      const preferred = el.closest('.MjjYud, .g, div[data-sokoban-container]') || link.closest('.MjjYud, .g, div[data-sokoban-container]');
-      if (preferred && (!rso || rso.contains(preferred))) return preferred;
-      let node = el.parentElement;
-      while (node && node.parentElement && node.parentElement !== rso && node !== document.body) node = node.parentElement;
-      if (node && rso && node.parentElement === rso) return node;
-    }
-    if (engine === 'duckduckgo') {
-      const preferred = el.closest('article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result') || link.closest('article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result');
-      if (preferred) return preferred;
-    }
-    if (engine === 'bing') {
-      const preferred = el.closest('.b_algo') || link.closest('.b_algo');
-      if (preferred) return preferred;
-    }
+    const rso = document.querySelector('#rso') || document.querySelector('#search');
+    const preferred = el.closest('.MjjYud, .g, div[data-sokoban-container]') || link.closest('.MjjYud, .g, div[data-sokoban-container]');
+    if (preferred && (!rso || rso.contains(preferred))) return preferred;
+    let node = el.parentElement;
+    while (node && node.parentElement && node.parentElement !== rso && node !== document.body) node = node.parentElement;
+    if (node && rso && node.parentElement === rso) return node;
     return el.closest(strategy.containerSelector) || link.closest(strategy.containerSelector) || el.parentElement || el;
   }
 
@@ -541,17 +448,9 @@
         let link = null;
         let url = null;
         if (strategy.linkResolver === 'closest_anchor') { link = el.closest('a[href]'); }
-        else if (strategy.linkResolver === 'self_or_closest_anchor') { link = (el.matches && el.matches('a[href]')) ? el : el.closest('a[href]'); if (!link) link = el.querySelector && el.querySelector('a[href]'); }
-        else if (strategy.linkResolver === 'walk_parent_or_child_anchor') {
-          let node = el.parentElement;
-          for (let i = 0; i < 10 && node && node !== document.body; i++) { if (node.tagName === 'A' && node.href) { link = node; break; } const a = node.querySelector('a[href]'); if (a && a.href) { link = a; break; } node = node.parentElement; }
-        } else if (strategy.linkResolver === 'walk_parent_15') {
-          let node = el.parentElement;
-          for (let i = 0; i < 15 && node && node !== document.body; i++) { if (node.tagName === 'A' && node.href) { link = node; break; } const a = node.querySelector('a[href]'); if (a) { try { if (!isBlockedHostname(new URL(resolveUrl(a.href)).hostname)) { link = a; break; } } catch { } } node = node.parentElement; }
-        } else if (strategy.linkSelector) {
+        else if (strategy.linkSelector) {
           const container = el.closest(strategy.containerSelector) || el;
           link = container.querySelector(strategy.linkSelector) || el.querySelector('a[href^="http"]');
-          if (!link) { const parentContainer = el.closest('article,li,[data-testid]'); if (parentContainer) link = parentContainer.querySelector(strategy.linkSelector); }
         }
         if (!link || !link.href) return;
         url = canonicalizeResultUrl(link.href);
@@ -561,10 +460,8 @@
         const container = findSafeResultContainer(el, link, strategy);
         if (!container || PROCESSED_CONTAINERS.has(container) || container.querySelector('[data-userply-wrapper]')) return;
         el.dataset.userplyDone = '1';
-        const titleEl = engine === 'duckduckgo'
-          ? (container.querySelector('[data-testid="result-title-a"], .result__title a, a.result__a, h2, h3, [role="heading"]') || el)
-          : (container.querySelector('h3, [role="heading"]') || el);
-        results.push({ container, url, titleEl, engine });
+        const titleEl = container.querySelector('h3, [role="heading"]') || el;
+        results.push({ container, url, titleEl });
       });
     }
     return results;
@@ -574,10 +471,15 @@
   let ORIGINAL_ORDER = null;
 
   function getSearchContainer() {
-    const engine = detectEngine();
-    const config = getEngineConfig(engine);
-    if (config && config.searchContainer) { const selectors = config.searchContainer.split(',').map(s => s.trim()); for (const sel of selectors) { const el = document.querySelector(sel); if (el) return el; } }
-    return document.querySelector('#rso') || document.querySelector('#search > div > div') || document.querySelector('#b_results') || document.querySelector('.results') || document.querySelector('#links');
+    const config = getEngineConfig('google');
+    if (config && config.searchContainer) {
+      const selectors = config.searchContainer.split(',').map(s => s.trim());
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el) return el;
+      }
+    }
+    return document.querySelector('#rso') || document.querySelector('#search > div > div');
   }
 
   function getSortableResultBlock(el) {
@@ -602,7 +504,6 @@
     sortable.setAttribute('data-userply-sort-date', stampedDate);
     container.setAttribute('data-userply-sortable', '1');
     container.setAttribute('data-userply-sort-date', stampedDate);
-    // Sorting disabled in this hard-normal build; stamp date only.
   }
 
   function getResultSortDate(result) {
@@ -610,39 +511,14 @@
     return result.actual_date || result.first_seen || result.claimed_date || null;
   }
 
-  function parsePillDate(el) {
-    const stampedDate = el.getAttribute('data-userply-sort-date') || el.querySelector('[data-userply-sort-date]')?.getAttribute('data-userply-sort-date');
-    if (stampedDate) { const d = new Date(stampedDate); if (!isNaN(d.getTime())) return d; }
-    const text = (el.textContent || '').trim();
-    const dateMatch = text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}/i);
-    if (dateMatch) { const d = new Date(dateMatch[0]); return isNaN(d.getTime()) ? null : d; }
-    const yearMatch = text.match(/\b(20\d{2})\b/);
-    if (yearMatch) return new Date(`${yearMatch[1]}-06-15`);
-    return null;
-  }
-
-  function getSortableChildren(container) {
-    return [...container.children].filter(el => el.id !== 'userply-sort');
-  }
-
-  function syncOriginalOrder(children) {
-    if (!ORIGINAL_ORDER) ORIGINAL_ORDER = [...children];
-    else {
-      ORIGINAL_ORDER = ORIGINAL_ORDER.filter(el => children.includes(el));
-      children.forEach(el => { if (!ORIGINAL_ORDER.includes(el)) ORIGINAL_ORDER.push(el); });
-    }
-    return ORIGINAL_ORDER;
-  }
-
   function applySortOrder() { }
-
   function injectSortButton() { }
 
   function injectStyles() {
     if (document.getElementById('userply-styles')) return;
     const style = document.createElement('style');
     style.id = 'userply-styles';
-    style.textContent = '@keyframes userply-pulse{0%,100%{opacity:.3}50%{opacity:.85}}[data-userply]{transform:none!important;rotate:none!important;scale:none!important;direction:ltr!important;unicode-bidi:isolate!important;writing-mode:horizontal-tb!important;text-orientation:mixed!important;}[data-userply-wrapper]{transform:none!important;rotate:none!important;scale:none!important;direction:ltr!important;unicode-bidi:isolate!important;writing-mode:horizontal-tb!important;contain:layout style!important;}';
+    style.textContent = '@keyframes userply-pulse{0%,100%{opacity:.3}50%{opacity:.85}}[data-userply]{transform:none!important;rotate:none!important;scale:none!important;direction:ltr!important;unicode-bidi:isolate!important}';
     document.head.appendChild(style);
   }
 
@@ -652,13 +528,16 @@
     repairFlippedSearchText();
     injectSortButton();
     const items = getResultLinks();
-    items.forEach(({ container, url, titleEl, engine }) => processResult(container, titleEl, url, engine));
+    items.forEach(({ container, url, titleEl }) => processResult(container, titleEl, url));
     setTimeout(repairFlippedSearchText, 50);
     setTimeout(repairFlippedSearchText, 300);
     scanCount++;
     if (scanCount === 3 && items.length === 0) {
       const engine = detectEngine();
-      if (engine) { const hasSearchQuery = window.location.search.includes('q=') || window.location.pathname.includes('/search'); if (hasSearchQuery) reportBreakage(engine, 0); }
+      if (engine) {
+        const hasSearchQuery = window.location.search.includes('q=') || window.location.pathname.includes('/search');
+        if (hasSearchQuery) reportBreakage(engine, 0);
+      }
     }
   }
 
