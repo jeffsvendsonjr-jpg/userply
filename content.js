@@ -13,6 +13,8 @@
   const CACHE_TTL = 86400000;
 
   const SETTINGS_KEY = 'userply_settings';
+  const LICENSE_STATUS_STORAGE = 'userply_license_status';
+  const FREE_LICENSE_STATUS = { valid: false, plan: 'Free', features: { dateSort: false } };
 
   function getSettings() {
     try {
@@ -31,6 +33,7 @@
 
   let REMOTE_CONFIG = null;
   let CONFIG_VERSION = 0;
+  let LICENSE_STATUS = { ...FREE_LICENSE_STATUS };
 
   const FALLBACK_CONFIG = {
     google: {
@@ -42,25 +45,39 @@
       snippetSelectors: ['.VwiC3b', '.s3v9rd', '.IsZvec', '.yDYNvb', '.MUxGbd', '.r025kc'],
       searchContainer: '#rso, #search > div > div',
     },
-    bing: {
-      strategies: [
-        { name: 'algo-h2', titleSelector: '.b_algo h2', linkSelector: 'a[href^="http"]', containerSelector: '.b_algo' },
-      ],
-      snippetSelectors: ['.b_caption p'],
-      searchContainer: '#b_results',
-    },
-    duckduckgo: {
-      strategies: [
-        // DuckDuckGo has multiple live layouts. Prefer explicit result title
-        // anchors first, then fall back to classic result headings.
-        { name: 'ddg-testid-title', titleSelector: 'a[data-testid="result-title-a"], [data-testid="result-title-a"] a[href]', linkResolver: 'self_or_closest_anchor', containerSelector: 'article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result' },
-        { name: 'ddg-result-title', titleSelector: '.result__title a[href], a.result__a[href], h2 a[href], h3 a[href]', linkResolver: 'self_or_closest_anchor', containerSelector: 'article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result' },
-        { name: 'ddg-heading-fallback', titleSelector: 'article h2, article h3, li h2, li h3, .result h2, .result h3', linkSelector: 'a[href]', containerSelector: 'article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result' },
-      ],
-      snippetSelectors: ['[data-testid="result-snippet"]', '[data-testid*="snippet"]', '.result__snippet', '.result__snippet.js-result-snippet', '[data-result="snippet"]', 'article span', 'article p'],
-      searchContainer: '#links, .results, [data-testid="mainline"], main',
-    },
   };
+
+  function normalizeLicenseStatus(status) {
+    if (!status || status.valid !== true || !status.features || status.features.dateSort !== true) {
+      return { ...FREE_LICENSE_STATUS };
+    }
+    return { valid: true, plan: status.plan || 'Pro', features: { dateSort: true } };
+  }
+
+  function canUseDateSort(status) {
+    status = status || LICENSE_STATUS || FREE_LICENSE_STATUS;
+    if (!status.features) return false;
+    return status.valid === true && status.features.dateSort === true;
+  }
+
+  async function loadLicenseStatus() {
+    return new Promise((resolve) => {
+      try {
+        if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+          LICENSE_STATUS = { ...FREE_LICENSE_STATUS };
+          resolve(LICENSE_STATUS);
+          return;
+        }
+        chrome.storage.local.get([LICENSE_STATUS_STORAGE], (data) => {
+          LICENSE_STATUS = normalizeLicenseStatus(data && data[LICENSE_STATUS_STORAGE]);
+          resolve(LICENSE_STATUS);
+        });
+      } catch {
+        LICENSE_STATUS = { ...FREE_LICENSE_STATUS };
+        resolve(LICENSE_STATUS);
+      }
+    });
+  }
 
   function trackEvent(eventType, metadata = {}) { }
 
@@ -243,10 +260,7 @@
     const urlDate = extractUrlDate(url);
     if (urlDate) return { iso: urlDate, source: 'URL date' };
     const visibleDate = extractSnippetDate(container, engine);
-    if (visibleDate) {
-      const label = engine === 'bing' ? 'Bing visible date' : engine === 'duckduckgo' ? 'DuckDuckGo visible date' : 'Google visible date';
-      return { iso: visibleDate, source: label };
-    }
+    if (visibleDate) return { iso: visibleDate, source: 'Google visible date' };
     return { iso: null, source: null };
   }
 
@@ -319,7 +333,7 @@
   }
 
   function neutralizeAncestorTransforms(el) {
-    // Intentionally no-op. The extension must never alter Google/Bing/DDG
+    // Intentionally no-op. The extension must never alter Google
     // result ancestors, because search pages sometimes use transforms for
     // layout. Touch only userp.ly's own injected nodes.
   }
@@ -341,22 +355,6 @@
         safeContainer.insertBefore(wrapper, safeContainer.firstChild || null);
         return;
       }
-    }
-
-    if ((engine === 'duckduckgo' || engine === 'bing') && container) {
-      const existing = container.querySelector(':scope > [data-userply-wrapper]');
-      if (existing) existing.remove();
-      wrapper.style.display = 'block';
-      wrapper.style.width = 'max-content';
-      wrapper.style.margin = '0 0 4px 0';
-      const heading = container.querySelector('h2, h3, [data-testid="result-title-a"], .result__title') || titleEl;
-      const headingRow = heading && heading.parentElement ? heading.parentElement : null;
-      if (headingRow && container.contains(headingRow)) {
-        headingRow.insertBefore(wrapper, heading.nextSibling || null);
-      } else {
-        container.insertBefore(wrapper, container.firstChild || null);
-      }
-      return;
     }
 
     const h3 = container ? (container.querySelector('h3, [role="heading"]') || titleEl) : titleEl;
@@ -447,32 +445,13 @@
         injectVerificationPill(titleEl, result, container);
       }
       repairFlippedSearchText();
+      applySortOrder();
     } catch { const ph = container.querySelector('[data-userply-wrapper]'); if (ph) ph.remove(); }
     finally { PROCESSING.delete(url); }
   }
 
-  const BLOCKED_RE = /^(www\.)?(google\.|youtube\.|gstatic\.|googleusercontent\.|googleapis\.|googlesyndication\.|doubleclick\.|bing\.|microsoft\.|duckduckgo\.)/i;
+  const BLOCKED_RE = /^(www\.)?(google\.|youtube\.|gstatic\.|googleusercontent\.|googleapis\.|googlesyndication\.|doubleclick\.)/i;
   function isBlockedHostname(hostname) { if (!hostname) return true; if (BLOCKED_RE.test(hostname)) return true; if (hostname.endsWith('.google.com') || hostname === 'google.com') return true; return false; }
-  function decodeBingRedirectValue(value) {
-    if (!value) return null;
-    try {
-      let v = value;
-      // Bing commonly stores the destination in a URL-safe base64-ish `u` param,
-      // often prefixed with `a1`. Decode it before hostname filtering so real
-      // Bing results are not mistaken for internal bing.com links.
-      if (v.startsWith('a1')) v = v.slice(2);
-      v = v.replace(/-/g, '+').replace(/_/g, '/');
-      while (v.length % 4) v += '=';
-      const decoded = atob(v);
-      if (decoded && (decoded.startsWith('http://') || decoded.startsWith('https://'))) return decoded;
-    } catch { }
-    try {
-      const decoded = decodeURIComponent(value);
-      if (decoded && (decoded.startsWith('http://') || decoded.startsWith('https://'))) return decoded;
-    } catch { }
-    return null;
-  }
-
   function resolveUrl(href) {
     try {
       const u = new URL(href, location.href);
@@ -481,12 +460,8 @@
         try {
           const decodedDirect = decodeURIComponent(direct);
           if (decodedDirect.startsWith('http://') || decodedDirect.startsWith('https://')) return decodedDirect;
-        } catch { }
+        } catch {         }
         if (direct.startsWith('http://') || direct.startsWith('https://')) return direct;
-      }
-      if (/bing\.com$/i.test(u.hostname) || /\.bing\.com$/i.test(u.hostname)) {
-        const decoded = decodeBingRedirectValue(u.searchParams.get('u')) || decodeBingRedirectValue(u.searchParams.get('r'));
-        if (decoded) return decoded;
       }
     } catch { }
     return href;
@@ -501,7 +476,7 @@
     } catch { return resolveUrl(href); }
   }
 
-  function detectEngine() { const host = window.location.hostname; if (/google\./i.test(host)) return 'google'; if (/bing\./i.test(host)) return 'bing'; if (/duckduckgo\./i.test(host)) return 'duckduckgo'; return null; }
+  function detectEngine() { const host = window.location.hostname; if (/google\./i.test(host)) return 'google'; return null; }
 
 
   function repairFlippedSearchText() { }
@@ -515,14 +490,6 @@
       let node = el.parentElement;
       while (node && node.parentElement && node.parentElement !== rso && node !== document.body) node = node.parentElement;
       if (node && rso && node.parentElement === rso) return node;
-    }
-    if (engine === 'duckduckgo') {
-      const preferred = el.closest('article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result') || link.closest('article[data-testid="result"], div[data-testid="result"], li[data-layout], article, li, .result, .web-result');
-      if (preferred) return preferred;
-    }
-    if (engine === 'bing') {
-      const preferred = el.closest('.b_algo') || link.closest('.b_algo');
-      if (preferred) return preferred;
     }
     return el.closest(strategy.containerSelector) || link.closest(strategy.containerSelector) || el.parentElement || el;
   }
@@ -561,23 +528,21 @@
         const container = findSafeResultContainer(el, link, strategy);
         if (!container || PROCESSED_CONTAINERS.has(container) || container.querySelector('[data-userply-wrapper]')) return;
         el.dataset.userplyDone = '1';
-        const titleEl = engine === 'duckduckgo'
-          ? (container.querySelector('[data-testid="result-title-a"], .result__title a, a.result__a, h2, h3, [role="heading"]') || el)
-          : (container.querySelector('h3, [role="heading"]') || el);
+        const titleEl = container.querySelector('h3, [role="heading"]') || el;
         results.push({ container, url, titleEl, engine });
       });
     }
     return results;
   }
 
-  let SORT_STATE = 'default';
+  let SORT_STATE = 'normal';
   let ORIGINAL_ORDER = null;
 
   function getSearchContainer() {
     const engine = detectEngine();
     const config = getEngineConfig(engine);
     if (config && config.searchContainer) { const selectors = config.searchContainer.split(',').map(s => s.trim()); for (const sel of selectors) { const el = document.querySelector(sel); if (el) return el; } }
-    return document.querySelector('#rso') || document.querySelector('#search > div > div') || document.querySelector('#b_results') || document.querySelector('.results') || document.querySelector('#links');
+    return document.querySelector('#rso') || document.querySelector('#search > div > div');
   }
 
   function getSortableResultBlock(el) {
@@ -602,7 +567,6 @@
     sortable.setAttribute('data-userply-sort-date', stampedDate);
     container.setAttribute('data-userply-sortable', '1');
     container.setAttribute('data-userply-sort-date', stampedDate);
-    // Sorting disabled in this hard-normal build; stamp date only.
   }
 
   function getResultSortDate(result) {
@@ -634,9 +598,65 @@
     return ORIGINAL_ORDER;
   }
 
-  function applySortOrder() { }
+  function applySortOrder() {
+    const container = getSearchContainer();
+    if (!container) return;
+    const children = getSortableChildren(container);
+    if (!children.length) return;
 
-  function injectSortButton() { }
+    if ((SORT_STATE === 'newest' || SORT_STATE === 'oldest') && !canUseDateSort()) SORT_STATE = 'normal';
+
+    const original = syncOriginalOrder(children).filter(el => children.includes(el));
+    let ordered = original;
+    if (SORT_STATE === 'newest' || SORT_STATE === 'oldest') {
+      ordered = [...children].sort((a, b) => {
+        const dateA = parsePillDate(a);
+        const dateB = parsePillDate(b);
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return SORT_STATE === 'newest' ? (dateB - dateA) : (dateA - dateB);
+      });
+    }
+
+    ordered.forEach((el) => container.appendChild(el));
+  }
+
+  function injectSortButton() {
+    const container = getSearchContainer();
+    if (!container) return;
+
+    let controls = document.getElementById('userply-sort');
+    if (!controls) {
+      controls = document.createElement('div');
+      controls.id = 'userply-sort';
+      controls.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;margin:0 0 8px 0;';
+      controls.innerHTML = '<span style="font-size:11px;color:#64748b;font-weight:600;">Sort:</span><button data-sort=\"normal\" style=\"padding:4px 8px;border:1px solid rgba(148,163,184,0.25);background:#111827;color:#e2e8f0;border-radius:999px;font-size:11px;cursor:pointer;\">Normal</button><button data-sort=\"newest\" style=\"padding:4px 8px;border:1px solid rgba(148,163,184,0.25);background:#111827;color:#e2e8f0;border-radius:999px;font-size:11px;cursor:pointer;\">Newest</button><button data-sort=\"oldest\" style=\"padding:4px 8px;border:1px solid rgba(148,163,184,0.25);background:#111827;color:#e2e8f0;border-radius:999px;font-size:11px;cursor:pointer;\">Oldest</button><span id=\"userply-sort-plan\" style=\"font-size:10px;color:#94a3b8;border:1px solid rgba(148,163,184,0.2);padding:2px 6px;border-radius:999px;\">Free</span>';
+      controls.addEventListener('click', (event) => {
+        const btn = event.target.closest('button[data-sort]');
+        if (!btn || btn.disabled) return;
+        SORT_STATE = btn.getAttribute('data-sort') || 'normal';
+        injectSortButton();
+        applySortOrder();
+      });
+      container.insertBefore(controls, container.firstChild || null);
+    }
+
+    const isPro = canUseDateSort();
+    controls.querySelectorAll('button[data-sort]').forEach((btn) => {
+      const mode = btn.getAttribute('data-sort');
+      const active = mode === SORT_STATE;
+      const proOnly = mode === 'newest' || mode === 'oldest';
+      btn.disabled = proOnly && !isPro;
+      btn.style.opacity = btn.disabled ? '0.5' : '1';
+      btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
+      btn.style.borderColor = active ? '#4ade80' : 'rgba(148,163,184,0.25)';
+      btn.style.color = active ? '#4ade80' : '#e2e8f0';
+      btn.title = btn.disabled ? 'Pro required' : '';
+    });
+    const plan = controls.querySelector('#userply-sort-plan');
+    if (plan) plan.textContent = isPro ? 'Pro' : 'Free';
+  }
 
   function injectStyles() {
     if (document.getElementById('userply-styles')) return;
@@ -664,6 +684,15 @@
 
   async function boot() {
     if (isDisabledSite()) return;
+    await loadLicenseStatus();
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local' || !changes[LICENSE_STATUS_STORAGE]) return;
+        LICENSE_STATUS = normalizeLicenseStatus(changes[LICENSE_STATUS_STORAGE].newValue);
+        injectSortButton();
+        applySortOrder();
+      });
+    }
     await fetchRemoteConfig();
     if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(scan, 300);
     else document.addEventListener('DOMContentLoaded', () => setTimeout(scan, 300));
@@ -677,7 +706,7 @@
       lastHref = location.href;
       PROCESSING.clear();
       scanCount = 0;
-      SORT_STATE = 'default';
+      SORT_STATE = 'normal';
       ORIGINAL_ORDER = null;
       document.getElementById('userply-sort')?.remove();
       setTimeout(scan, 200);
