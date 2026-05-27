@@ -2,6 +2,7 @@
 // Review-hardened: no analytics or install/update event tracking.
 
 const SUPABASE_URL = 'https://nihquqccvnfuaqsxyymj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5paHF1cWNjdm5mdWFxc3h5eW1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjQ1ODIsImV4cCI6MjA5NDY0MDU4Mn0.Q0ea1N8iWDoy0KzbFvL4rFYg0liZevnC3AFUDiJY1yE';
 const VERIFY_URL = `${SUPABASE_URL}/functions/v1/verify-date`;
 const LICENSE_VERIFY_URL = 'https://public-website-builder.replit.app/api/license/verify';
 const LICENSE_KEY_STORAGE = 'userply_license_key';
@@ -59,7 +60,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const res = await fetch(VERIFY_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'apikey': SUPABASE_ANON_KEY,
+          },
           body: JSON.stringify({
             url: message.url,
             claimed_date: message.claimedDate || undefined,

@@ -55,8 +55,9 @@
   }
 
   function canUseDateSort(status) {
-    const s = status || LICENSE_STATUS;
-    return s.valid === true && s.features && s.features.dateSort === true;
+    status = status || LICENSE_STATUS || FREE_LICENSE_STATUS;
+    if (!status.features) return false;
+    return status.valid === true && status.features.dateSort === true;
   }
 
   async function loadLicenseStatus() {
