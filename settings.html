@@ -32,9 +32,18 @@
     .add-site input { flex: 1; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 6px 10px; font-size: 12px; outline: none; }
     .add-site input:focus { border-color: #4ade80; }
     .add-site button { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
-    .add-site button:hover { background: #16a34a; }
     .saved-msg { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .saved-msg.show { opacity: 1; }
+    .license-input { width: 100%; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 8px 10px; font-size: 12px; outline: none; margin-bottom: 8px; font-family: monospace; }
+    .license-input:focus { border-color: #4ade80; }
+    .license-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .btn-verify { background: #1a73e8; color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .btn-verify:hover { background: #1557b0; }
+    .btn-verify:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+    .plan-status { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 10px; }
+    .plan-status.free { background: rgba(148,163,184,0.1); color: #64748b; border: 1px solid rgba(148,163,184,0.2); }
+    .plan-status.pro { background: rgba(34,197,94,0.12); color: #16a34a; border: 1px solid rgba(34,197,94,0.25); }
+    .license-msg { font-size: 11px; margin-top: 6px; min-height: 16px; }
   </style>
 </head>
 <body>
@@ -42,6 +51,21 @@
     <div class="header">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       <h1>Settings</h1>
+    </div>
+    <div class="section">
+      <div class="section-title">License</div>
+      <div class="setting-row">
+        <div><div class="setting-label">Plan</div><div class="setting-desc">Your current subscription tier</div></div>
+        <span class="plan-status free" id="plan-status">Free</span>
+      </div>
+      <div style="margin-top:12px;">
+        <div class="setting-label" style="margin-bottom:6px;">License Key</div>
+        <input type="text" class="license-input" id="license-key-input" placeholder="Enter your Pro license key…" autocomplete="off" spellcheck="false">
+        <div class="license-row">
+          <button class="btn-verify" id="verify-license-btn">Verify &amp; Save</button>
+        </div>
+        <div class="license-msg" id="license-msg"></div>
+      </div>
     </div>
     <div class="section">
       <div class="section-title">Display</div>

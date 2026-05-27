@@ -30,4 +30,47 @@
   });
   document.getElementById('new-site').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('add-site-btn').click(); });
   document.getElementById('clear-cache').addEventListener('click', function() { localStorage.removeItem('userply_cache'); showSaved(); });
+
+  // License management
+  function renderPlanStatus(status) {
+    var badge = document.getElementById('plan-status');
+    if (!badge) return;
+    var isPro = status && status.valid === true;
+    badge.textContent = isPro ? 'Pro' : 'Free';
+    badge.className = 'plan-status ' + (isPro ? 'pro' : 'free');
+  }
+  function setLicenseMsg(text, color) {
+    var el = document.getElementById('license-msg');
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = color || '#94a3b8';
+  }
+  chrome.runtime.sendMessage({ type: 'USERPLY_LICENSE_GET' }, function(response) {
+    if (chrome.runtime.lastError) return;
+    var status = (response && response.status) || { valid: false, plan: 'free' };
+    renderPlanStatus(status);
+    var keyInput = document.getElementById('license-key-input');
+    if (keyInput && response && response.licenseKey) keyInput.value = response.licenseKey;
+  });
+  document.getElementById('verify-license-btn').addEventListener('click', function() {
+    var btn = this;
+    var keyInput = document.getElementById('license-key-input');
+    var key = (keyInput && keyInput.value || '').trim();
+    if (!key) { setLicenseMsg('Please enter a license key.', '#f87171'); return; }
+    btn.disabled = true;
+    setLicenseMsg('Verifying…', '#94a3b8');
+    chrome.runtime.sendMessage({ type: 'USERPLY_LICENSE_VERIFY', licenseKey: key }, function(response) {
+      btn.disabled = false;
+      if (chrome.runtime.lastError || !response) { setLicenseMsg('Verification failed. Please try again.', '#f87171'); return; }
+      if (!response.ok) { setLicenseMsg('Verification failed. Please check your key.', '#f87171'); renderPlanStatus({ valid: false }); return; }
+      var status = response.status || { valid: false, plan: 'free' };
+      renderPlanStatus(status);
+      if (status.valid) {
+        var planLabel = status.plan === 'lifetime_pro' || status.plan === 'lifetime' ? 'Lifetime Pro' : 'Monthly Pro';
+        setLicenseMsg('Activated: ' + planLabel, '#4ade80');
+      } else {
+        setLicenseMsg('Key not valid or expired. You are on the Free plan.', '#f87171');
+      }
+    });
+  });
 })();
