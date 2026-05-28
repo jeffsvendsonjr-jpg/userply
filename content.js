@@ -244,7 +244,7 @@
     if (urlDate) return { iso: urlDate, source: 'URL date' };
     const visibleDate = extractSnippetDate(container, engine);
     if (visibleDate) {
-      const label = engine === 'bing' ? 'Bing visible date' : engine === 'duckduckgo' ? 'DuckDuckGo visible date' : 'Google visible date';
+      const label = 'Visible date';
       return { iso: visibleDate, source: label };
     }
     return { iso: null, source: null };
@@ -572,12 +572,25 @@
 
   let SORT_STATE = 'default';
   let ORIGINAL_ORDER = null;
+  let PRO_STATUS = { valid: false, plan: 'free', features: { dateSort: false } };
+
+  function getProStatus(callback) {
+    try {
+      if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) { callback(PRO_STATUS); return; }
+      chrome.runtime.sendMessage({ type: 'USERPLY_LICENSE_GET' }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.ok) { callback(PRO_STATUS); return; }
+        PRO_STATUS = response.status || { valid: false, plan: 'free', features: { dateSort: false } };
+        callback(PRO_STATUS);
+      });
+    } catch { callback(PRO_STATUS); }
+  }
+
+  function isProSort(status) {
+    return status && status.valid === true && status.features && status.features.dateSort === true;
+  }
 
   function getSearchContainer() {
-    const engine = detectEngine();
-    const config = getEngineConfig(engine);
-    if (config && config.searchContainer) { const selectors = config.searchContainer.split(',').map(s => s.trim()); for (const sel of selectors) { const el = document.querySelector(sel); if (el) return el; } }
-    return document.querySelector('#rso') || document.querySelector('#search > div > div') || document.querySelector('#b_results') || document.querySelector('.results') || document.querySelector('#links');
+    return document.querySelector('#rso') || document.querySelector('#search > div > div');
   }
 
   function getSortableResultBlock(el) {
@@ -602,7 +615,6 @@
     sortable.setAttribute('data-userply-sort-date', stampedDate);
     container.setAttribute('data-userply-sortable', '1');
     container.setAttribute('data-userply-sort-date', stampedDate);
-    // Sorting disabled in this hard-normal build; stamp date only.
   }
 
   function getResultSortDate(result) {
@@ -634,9 +646,75 @@
     return ORIGINAL_ORDER;
   }
 
-  function applySortOrder() { }
+  function applySortOrder() {
+    const container = getSearchContainer();
+    if (!container) return;
+    const children = getSortableChildren(container);
+    syncOriginalOrder(children);
+    if (SORT_STATE === 'default') {
+      ORIGINAL_ORDER.forEach(el => container.appendChild(el));
+      return;
+    }
+    const withDate = children.filter(el => el.getAttribute('data-userply-sort-date'));
+    const withoutDate = children.filter(el => !el.getAttribute('data-userply-sort-date'));
+    const sorted = [...withDate].sort((a, b) => {
+      const da = new Date(a.getAttribute('data-userply-sort-date') || '').getTime() || 0;
+      const db = new Date(b.getAttribute('data-userply-sort-date') || '').getTime() || 0;
+      return SORT_STATE === 'newest' ? db - da : da - db;
+    });
+    [...sorted, ...withoutDate].forEach(el => container.appendChild(el));
+  }
 
-  function injectSortButton() { }
+  function injectSortButton() {
+    if (document.getElementById('userply-sort')) return;
+    const container = getSearchContainer();
+    if (!container) return;
+    const bar = document.createElement('div');
+    bar.id = 'userply-sort';
+    bar.setAttribute('data-userply-sort-bar', '1');
+    bar.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 0 10px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:12px;user-select:none;';
+    const label = document.createElement('span');
+    label.textContent = 'Sort:';
+    label.style.cssText = 'color:#5f6368;font-size:12px;margin-right:2px;';
+    bar.appendChild(label);
+    const buttons = [
+      { id: 'userply-sort-default', label: 'Normal', state: 'default', pro: false },
+      { id: 'userply-sort-newest', label: 'Newest', state: 'newest', pro: true },
+      { id: 'userply-sort-oldest', label: 'Oldest', state: 'oldest', pro: true },
+    ];
+    function renderButtons(status) {
+      bar.querySelectorAll('[data-userply-sort-btn]').forEach(el => el.remove());
+      buttons.forEach(({ id, label, state, pro }) => {
+        const btn = document.createElement('button');
+        btn.id = id;
+        btn.setAttribute('data-userply-sort-btn', state);
+        btn.textContent = label;
+        const active = SORT_STATE === state;
+        const locked = pro && !isProSort(status);
+        btn.disabled = locked;
+        btn.title = locked ? 'Pro required — upgrade to sort by date' : '';
+        btn.style.cssText = 'border:1px solid ' + (active ? '#1a73e8' : '#dadce0') + ';background:' + (active ? '#e8f0fe' : '#fff') + ';color:' + (locked ? '#aaa' : active ? '#1a73e8' : '#3c4043') + ';border-radius:16px;padding:3px 12px;font-size:12px;font-weight:' + (active ? '600' : '400') + ';cursor:' + (locked ? 'not-allowed' : 'pointer') + ';transition:all 0.1s;';
+        if (!locked) {
+          btn.addEventListener('click', () => {
+            SORT_STATE = state;
+            applySortOrder();
+            renderButtons(status);
+          });
+        }
+        bar.appendChild(btn);
+      });
+      if (!isProSort(status)) {
+        const proTag = document.createElement('span');
+        proTag.textContent = '✦ Pro';
+        proTag.style.cssText = 'font-size:10px;color:#1a73e8;background:#e8f0fe;border:1px solid #c5d9f7;border-radius:10px;padding:2px 7px;margin-left:4px;font-weight:600;letter-spacing:0.02em;';
+        proTag.title = 'Newest/Oldest sorting requires a Pro license';
+        bar.appendChild(proTag);
+      }
+    }
+    bar.appendChild(label);
+    container.insertBefore(bar, container.firstChild);
+    getProStatus(renderButtons);
+  }
 
   function injectStyles() {
     if (document.getElementById('userply-styles')) return;
