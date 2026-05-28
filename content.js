@@ -244,7 +244,7 @@
     if (urlDate) return { iso: urlDate, source: 'URL date' };
     const visibleDate = extractSnippetDate(container, engine);
     if (visibleDate) {
-      const label = 'Google visible date';
+      const label = 'Visible date';
       return { iso: visibleDate, source: label };
     }
     return { iso: null, source: null };
