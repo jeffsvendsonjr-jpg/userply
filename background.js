@@ -35,7 +35,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const data = await res.json();
         sendResponse({ ok: true, data });
       } catch (error) {
-        sendResponse({ ok: false, error: String(error && error.message ? error.message : error) });
+        sendResponse({ ok: false, error: error?.message || 'Unknown error' });
       }
     })();
     return true;
@@ -67,7 +67,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const data = await res.json();
       sendResponse({ ok: true, data });
     } catch (error) {
-      sendResponse({ ok: false, error: String(error && error.message ? error.message : error) });
+      sendResponse({ ok: false, error: error?.message || 'Unknown error' });
     }
   })();
 

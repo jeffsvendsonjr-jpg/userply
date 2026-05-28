@@ -848,12 +848,25 @@
       scanCount = 0;
       SORT_STATE = SORT_MODE_NORMAL;
       ORIGINAL_ORDER = null;
+      DATE_SORT_ENABLED = false;
+      LICENSE_STATUS_LOADING = false;
+      LICENSE_STATUS_RESOLVED = false;
       document.getElementById('userply-sort')?.remove();
       setTimeout(scan, 200);
       setTimeout(scan, 800);
     }
     window.addEventListener('popstate', onUrlChange);
     ['pushState', 'replaceState'].forEach(fn => { const orig = history[fn]; history[fn] = function () { const ret = orig.apply(this, arguments); setTimeout(onUrlChange, 0); return ret; }; });
+    if (chrome && chrome.storage && chrome.storage.onChanged && chrome.storage.onChanged.addListener) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if ((areaName === 'local' || areaName === 'sync') && changes.licenseKey) {
+          DATE_SORT_ENABLED = false;
+          LICENSE_STATUS_LOADING = false;
+          LICENSE_STATUS_RESOLVED = false;
+          ensureSortLicenseStatus();
+        }
+      });
+    }
     setInterval(onUrlChange, 1000);
   }
 
