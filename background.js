@@ -28,7 +28,7 @@ async function verifyLicenseKey(licenseKey) {
     const res = await fetch(LICENSE_VERIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ license_key: licenseKey }),
+      body: JSON.stringify({ licenseKey }),
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return { valid: false, plan: 'free', features: { dateSort: false } };
