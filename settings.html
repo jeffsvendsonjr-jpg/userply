@@ -33,6 +33,12 @@
     .add-site input:focus { border-color: #4ade80; }
     .add-site button { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .add-site button:hover { background: #16a34a; }
+    .license-input { width: 100%; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 8px 10px; font-size: 12px; outline: none; margin-bottom: 10px; }
+    .license-input:focus { border-color: #4ade80; }
+    .license-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .license-status { font-size: 12px; color: #94a3b8; }
+    .verify-save-btn { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .verify-save-btn:hover { background: #16a34a; }
     .saved-msg { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .saved-msg.show { opacity: 1; }
   </style>
@@ -48,6 +54,14 @@
       <div class="setting-row"><div><div class="setting-label">Show verification pills</div><div class="setting-desc">Display date verification badges on search results</div></div><label class="toggle"><input type="checkbox" id="toggle-enabled" checked><span class="slider"></span></label></div>
       <div class="setting-row"><div><div class="setting-label">Pill position</div><div class="setting-desc">Where to place the badge relative to the title</div></div><select id="pill-position"><option value="below">Below title</option><option value="inline">Inline with title</option></select></div>
       <div class="setting-row"><div><div class="setting-label">Show on no-archive results</div><div class="setting-desc">Display pill even when no archive record exists</div></div><label class="toggle"><input type="checkbox" id="toggle-noarchive" checked><span class="slider"></span></label></div>
+    </div>
+    <div class="section">
+      <div class="section-title">License</div>
+      <input type="text" id="license-key" class="license-input" placeholder="USERPLY-XXXX-XXXX-XXXX">
+      <div class="license-actions">
+        <div class="license-status" id="license-status">Plan: Free</div>
+        <button id="verify-save-btn" class="verify-save-btn">Verify &amp; Save</button>
+      </div>
     </div>
     <div class="section">
       <div class="section-title">Disabled Sites</div>
