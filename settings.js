@@ -102,7 +102,7 @@
       persistLicenseKey(licenseKey, function() {
         verifyLicenseBtn.disabled = false;
         if (!result.ok) {
-          setLicenseStatus('Saved key, but verification failed. Try again.', 'error');
+          setLicenseStatus('Saved key, but verification failed' + (result.error ? ': ' + result.error : '.') + ' Try again.', 'error');
           return;
         }
         if (result.data.valid === true && result.data.features && result.data.features.dateSort === true) {
