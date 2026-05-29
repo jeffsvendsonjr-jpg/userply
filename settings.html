@@ -33,6 +33,13 @@
     .add-site input:focus { border-color: #4ade80; }
     .add-site button { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .add-site button:hover { background: #16a34a; }
+    .license-row { display: flex; gap: 6px; margin-bottom: 8px; }
+    .license-row input { flex: 1; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 6px 10px; font-size: 12px; outline: none; }
+    .license-row input:focus { border-color: #4ade80; }
+    .license-row button { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .license-status { font-size: 12px; color: #94a3b8; min-height: 16px; }
+    .license-status.ok { color: #4ade80; }
+    .license-status.error { color: #f87171; }
     .saved-msg { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .saved-msg.show { opacity: 1; }
   </style>
@@ -54,6 +61,14 @@
       <p style="font-size:12px;color:#64748b;margin-bottom:12px;">The extension will not run on these domains.</p>
       <ul class="disabled-site-list" id="disabled-list"></ul>
       <div class="add-site"><input type="text" id="new-site" placeholder="e.g. reddit.com"><button id="add-site-btn">Add</button></div>
+    </div>
+    <div class="section">
+      <div class="section-title">License</div>
+      <div class="license-row">
+        <input type="text" id="license-key" placeholder="USERPLY-xxxx-xxxx-xxxx" />
+        <button id="verify-license-btn">Verify &amp; Save</button>
+      </div>
+      <div id="license-status" class="license-status">Enter your key, then click Verify &amp; Save.</div>
     </div>
     <div class="section">
       <div class="section-title">Data</div>
