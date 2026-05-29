@@ -36,7 +36,8 @@
   document.getElementById('new-site').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('add-site-btn').click(); });
   document.getElementById('clear-cache').addEventListener('click', function() { localStorage.removeItem('userply_cache'); showSaved(); });
   chrome.storage.local.get([LICENSE_KEY_STORAGE, 'licenseTier'], function(data) {
-    document.getElementById('license-key').value = typeof data.licenseKey === 'string' ? data.licenseKey : '';
+    const storedLicenseKey = data[LICENSE_KEY_STORAGE];
+    document.getElementById('license-key').value = typeof storedLicenseKey === 'string' ? storedLicenseKey : '';
     setLicenseStatus(data.licenseTier === 'pro');
   });
   document.getElementById('verify-save-btn').addEventListener('click', function() {
