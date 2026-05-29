@@ -14,7 +14,7 @@
     if (cls) el.classList.add(cls);
   }
   function getLicenseStorage() {
-    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local || !chrome.storage.sync) return null;
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return null;
     return chrome.storage;
   }
   function readStoredLicenseKey(done) {
@@ -23,6 +23,10 @@
     storage.local.get('licenseKey', function(local) {
       if (local && typeof local.licenseKey === 'string' && local.licenseKey.trim()) {
         done(local.licenseKey.trim());
+        return;
+      }
+      if (!storage.sync) {
+        done('');
         return;
       }
       storage.sync.get('licenseKey', function(sync) {
@@ -38,6 +42,10 @@
     var storage = getLicenseStorage();
     if (!storage) { done(); return; }
     storage.local.set({ licenseKey: licenseKey }, function() {
+      if (!storage.sync) {
+        done();
+        return;
+      }
       storage.sync.set({ licenseKey: licenseKey }, function() { done(); });
     });
   }
@@ -100,6 +108,10 @@
         if (result.data.valid === true && result.data.features && result.data.features.dateSort === true) {
           setLicenseStatus('License verified and saved.', 'ok');
           showSaved();
+          return;
+        }
+        if (result.data.valid === true) {
+          setLicenseStatus('License saved, but this plan does not include date sorting.', 'error');
           return;
         }
         setLicenseStatus('License saved, but this key does not enable date sorting.', 'error');
