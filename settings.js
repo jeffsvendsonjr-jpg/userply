@@ -89,7 +89,7 @@
   verifyLicenseBtn.addEventListener('click', function() {
     var licenseKey = (licenseInput.value || '').trim();
     verifyLicenseBtn.disabled = true;
-    setLicenseStatus('Verifying license…');
+    setLicenseStatus('Verifying license...');
     verifyLicenseKey(licenseKey, function(result) {
       persistLicenseKey(licenseKey, function() {
         verifyLicenseBtn.disabled = false;
