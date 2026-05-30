@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "userp.ly \u2014 Reality Partitioner",
-  "version": "1.0.9",
+  "version": "1.1.4",
   "description": "Shows date context on search results before you click.",
   "permissions": [
     "storage"
   ],
   "host_permissions": [
-    "https://nihquqccvnfuaqsxyymj.supabase.co/*"
+    "https://nihquqccvnfuaqsxyymj.supabase.co/*",
+    "https://public-website-builder.replit.app/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -34,12 +35,7 @@
         "https://www.google.it/*",
         "https://www.google.com.mx/*",
         "https://www.google.nl/*",
-        "https://www.google.pl/*",
-        "https://www.bing.com/*",
-        "https://bing.com/*",
-        "https://duckduckgo.com/*",
-        "https://www.duckduckgo.com/*",
-        "https://html.duckduckgo.com/*"
+        "https://www.google.pl/*"
       ],
       "js": [
         "content.js"

@@ -244,7 +244,7 @@
     if (urlDate) return { iso: urlDate, source: 'URL date' };
     const visibleDate = extractSnippetDate(container, engine);
     if (visibleDate) {
-      const label = engine === 'bing' ? 'Bing visible date' : engine === 'duckduckgo' ? 'DuckDuckGo visible date' : 'Google visible date';
+      const label = 'Google visible date';
       return { iso: visibleDate, source: label };
     }
     return { iso: null, source: null };
@@ -570,8 +570,14 @@
     return results;
   }
 
-  let SORT_STATE = 'default';
+  const SORT_MODE_NORMAL = 'normal';
+  const SORT_MODE_NEWEST = 'newest';
+  const SORT_MODE_OLDEST = 'oldest';
+  let SORT_STATE = SORT_MODE_NORMAL;
   let ORIGINAL_ORDER = null;
+  let DATE_SORT_ENABLED = false;
+  let LICENSE_STATUS_LOADING = false;
+  let LICENSE_STATUS_RESOLVED = false;
 
   function getSearchContainer() {
     const engine = detectEngine();
@@ -634,9 +640,172 @@
     return ORIGINAL_ORDER;
   }
 
-  function applySortOrder() { }
+  function enforceSortAccess() {
+    if (DATE_SORT_ENABLED) return;
+    if (SORT_STATE !== SORT_MODE_NORMAL) SORT_STATE = SORT_MODE_NORMAL;
+  }
 
-  function injectSortButton() { }
+  function getStoredLicenseKey() {
+    return new Promise((resolve) => {
+      try {
+        if (!chrome || !chrome.storage || !chrome.storage.local || !chrome.storage.local.get) {
+          resolve(null);
+          return;
+        }
+        chrome.storage.local.get(['licenseKey'], (localData) => {
+          if (chrome.runtime.lastError) {
+            resolve(null);
+            return;
+          }
+          const direct = localData && typeof localData.licenseKey === 'string' ? localData.licenseKey.trim() : '';
+          if (direct) {
+            resolve(direct);
+            return;
+          }
+          if (!chrome.storage.sync || !chrome.storage.sync.get) {
+            resolve(null);
+            return;
+          }
+          chrome.storage.sync.get(['licenseKey'], (syncData) => {
+            if (chrome.runtime.lastError) {
+              resolve(null);
+              return;
+            }
+            const syncKey = syncData && typeof syncData.licenseKey === 'string' ? syncData.licenseKey.trim() : '';
+            resolve(syncKey || null);
+          });
+        });
+      } catch {
+        resolve(null);
+      }
+    });
+  }
+
+  function verifyLicenseKey(licenseKey) {
+    return new Promise((resolve) => {
+      try {
+        if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage || !licenseKey) {
+          resolve(false);
+          return;
+        }
+        chrome.runtime.sendMessage(
+          { type: 'USERPLY_VERIFY_LICENSE', licenseKey },
+          (response) => {
+            if (chrome.runtime.lastError || !response || !response.ok || !response.data) {
+              resolve(false);
+              return;
+            }
+            const data = response.data;
+            resolve(data.valid === true && data.features && data.features.dateSort === true);
+          }
+        );
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
+  async function ensureSortLicenseStatus() {
+    if (LICENSE_STATUS_LOADING || LICENSE_STATUS_RESOLVED) return;
+    LICENSE_STATUS_LOADING = true;
+    try {
+      const licenseKey = await getStoredLicenseKey();
+      if (!licenseKey) {
+        DATE_SORT_ENABLED = false;
+      } else {
+        DATE_SORT_ENABLED = await verifyLicenseKey(licenseKey);
+      }
+    } catch {
+      DATE_SORT_ENABLED = false;
+    } finally {
+      LICENSE_STATUS_LOADING = false;
+      LICENSE_STATUS_RESOLVED = true;
+      enforceSortAccess();
+      injectSortButton();
+      applySortOrder();
+    }
+  }
+
+  function applySortOrder() {
+    const searchContainer = getSearchContainer();
+    if (!searchContainer) return;
+    const children = getSortableChildren(searchContainer);
+    const original = syncOriginalOrder(children);
+    enforceSortAccess();
+
+    if (SORT_STATE === SORT_MODE_NORMAL) {
+      original.forEach(el => {
+        if (el.parentElement === searchContainer) searchContainer.appendChild(el);
+      });
+      return;
+    }
+
+    const sorted = children.map((el, index) => ({
+      el,
+      index,
+      time: parsePillDate(el)?.getTime() ?? null,
+    })).sort((a, b) => {
+      if (a.time === null && b.time === null) return a.index - b.index;
+      if (a.time === null) return 1;
+      if (b.time === null) return -1;
+      return SORT_STATE === SORT_MODE_NEWEST ? b.time - a.time : a.time - b.time;
+    });
+
+    sorted.forEach(item => {
+      if (item.el.parentElement === searchContainer) searchContainer.appendChild(item.el);
+    });
+  }
+
+  function injectSortButton() {
+    const engine = detectEngine();
+    const existing = document.getElementById('userply-sort');
+    if (engine !== 'google') {
+      if (existing) existing.remove();
+      return;
+    }
+    const searchContainer = getSearchContainer();
+    if (!searchContainer || !searchContainer.parentElement) return;
+    if (!existing) {
+      const controls = document.createElement('div');
+      controls.id = 'userply-sort';
+      controls.style.cssText = 'display:flex;gap:8px;align-items:center;margin:8px 0;font-family:Arial,sans-serif;';
+
+      const makeBtn = (label, mode) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = label;
+        btn.dataset.userplySortMode = mode;
+        btn.style.cssText = 'padding:4px 10px;border-radius:999px;border:1px solid rgba(148,163,184,.35);background:#fff;color:#334155;font-size:12px;line-height:1.3;cursor:pointer;';
+        btn.addEventListener('click', () => {
+          if (btn.disabled) return;
+          SORT_STATE = mode;
+          injectSortButton();
+          applySortOrder();
+        });
+        return btn;
+      };
+
+      controls.appendChild(makeBtn('Normal', SORT_MODE_NORMAL));
+      controls.appendChild(makeBtn('Newest', SORT_MODE_NEWEST));
+      controls.appendChild(makeBtn('Oldest', SORT_MODE_OLDEST));
+      searchContainer.parentElement.insertBefore(controls, searchContainer);
+    }
+
+    const current = document.getElementById('userply-sort');
+    if (!current) return;
+    current.querySelectorAll('button[data-userply-sort-mode]').forEach((btn) => {
+      const mode = btn.dataset.userplySortMode;
+      const isPremiumMode = mode === SORT_MODE_NEWEST || mode === SORT_MODE_OLDEST;
+      btn.disabled = isPremiumMode && !DATE_SORT_ENABLED;
+      btn.style.opacity = btn.disabled ? '0.55' : '1';
+      btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
+      btn.title = btn.disabled ? 'Upgrade required' : '';
+      btn.style.background = mode === SORT_STATE ? '#e2e8f0' : '#fff';
+      btn.style.borderColor = mode === SORT_STATE ? '#94a3b8' : 'rgba(148,163,184,.35)';
+    });
+
+    if (!LICENSE_STATUS_LOADING && !LICENSE_STATUS_RESOLVED) ensureSortLicenseStatus();
+  }
 
   function injectStyles() {
     if (document.getElementById('userply-styles')) return;
@@ -677,14 +846,27 @@
       lastHref = location.href;
       PROCESSING.clear();
       scanCount = 0;
-      SORT_STATE = 'default';
+      SORT_STATE = SORT_MODE_NORMAL;
       ORIGINAL_ORDER = null;
+      DATE_SORT_ENABLED = false;
+      LICENSE_STATUS_LOADING = false;
+      LICENSE_STATUS_RESOLVED = false;
       document.getElementById('userply-sort')?.remove();
       setTimeout(scan, 200);
       setTimeout(scan, 800);
     }
     window.addEventListener('popstate', onUrlChange);
     ['pushState', 'replaceState'].forEach(fn => { const orig = history[fn]; history[fn] = function () { const ret = orig.apply(this, arguments); setTimeout(onUrlChange, 0); return ret; }; });
+    if (chrome && chrome.storage && chrome.storage.onChanged && chrome.storage.onChanged.addListener) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if ((areaName === 'local' || areaName === 'sync') && changes.licenseKey) {
+          DATE_SORT_ENABLED = false;
+          LICENSE_STATUS_LOADING = false;
+          LICENSE_STATUS_RESOLVED = false;
+          ensureSortLicenseStatus();
+        }
+      });
+    }
     setInterval(onUrlChange, 1000);
   }
 

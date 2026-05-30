@@ -1,10 +1,15 @@
 (function() {
   'use strict';
   const SETTINGS_KEY = 'userply_settings';
+  const LICENSE_KEY_STORAGE = 'licenseKey';
   const defaults = { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
   function load() { try { const raw = localStorage.getItem(SETTINGS_KEY); return raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults }; } catch { return { ...defaults }; } }
   function save(settings) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); showSaved(); }
   function showSaved() { const msg = document.getElementById('saved-msg'); msg.classList.add('show'); setTimeout(function() { msg.classList.remove('show'); }, 1500); }
+  function setLicenseStatus(isPro) { document.getElementById('license-status').textContent = isPro ? 'Plan: Pro' : 'Plan: Free'; }
+  function saveLicense(licenseKey, isPro) {
+    chrome.storage.local.set({ [LICENSE_KEY_STORAGE]: licenseKey, licenseTier: isPro ? 'pro' : 'free' }, showSaved);
+  }
   function renderDisabledList(settings) {
     var list = document.getElementById('disabled-list');
     list.innerHTML = '';
@@ -30,4 +35,17 @@
   });
   document.getElementById('new-site').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('add-site-btn').click(); });
   document.getElementById('clear-cache').addEventListener('click', function() { localStorage.removeItem('userply_cache'); showSaved(); });
+  chrome.storage.local.get([LICENSE_KEY_STORAGE, 'licenseTier'], function(data) {
+    const storedLicenseKey = data[LICENSE_KEY_STORAGE];
+    document.getElementById('license-key').value = typeof storedLicenseKey === 'string' ? storedLicenseKey : '';
+    setLicenseStatus(data.licenseTier === 'pro');
+  });
+  document.getElementById('verify-save-btn').addEventListener('click', function() {
+    const licenseKey = document.getElementById('license-key').value.trim();
+    chrome.runtime.sendMessage({ type: 'USERPLY_VERIFY_LICENSE', licenseKey }, function(response) {
+      const isPro = Boolean(response && response.ok && response.data && response.data.valid === true && response.data.features && response.data.features.dateSort === true);
+      setLicenseStatus(isPro);
+      saveLicense(licenseKey, isPro);
+    });
+  });
 })();

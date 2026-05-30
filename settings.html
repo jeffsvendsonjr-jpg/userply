@@ -26,13 +26,20 @@
     select { background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; outline: none; }
     select:focus { border-color: #4ade80; }
     .disabled-site-list { list-style: none; margin-bottom: 8px; }
-    .disabled-site-list li { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(148,163,184,0.06); border-radius: 6px; margin-bottom: 4px; font-size: 12px; color: #94a3b8; }
+    .disabled-site-list li { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(148,163,184,0.06); border-radius: 6px; margin-bottom: 4px; font-size: 12px; color: #cbd5e1; }
     .disabled-site-list li button { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; padding: 0 4px; }
     .add-site { display: flex; gap: 6px; }
     .add-site input { flex: 1; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 6px 10px; font-size: 12px; outline: none; }
     .add-site input:focus { border-color: #4ade80; }
     .add-site button { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .add-site button:hover { background: #16a34a; }
+    .license-input { width: 100%; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.2); border-radius: 6px; padding: 8px 10px; font-size: 12px; outline: none; margin-bottom: 10px; }
+    .license-input:focus { border-color: #4ade80; }
+    .license-help { font-size: 11px; color: #64748b; line-height: 1.5; margin-bottom: 10px; }
+    .license-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .license-status { font-size: 12px; color: #94a3b8; }
+    .verify-save-btn { background: #22c55e; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .verify-save-btn:hover { background: #16a34a; }
     .saved-msg { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #22c55e; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
     .saved-msg.show { opacity: 1; }
   </style>
@@ -50,6 +57,15 @@
       <div class="setting-row"><div><div class="setting-label">Show on no-archive results</div><div class="setting-desc">Display pill even when no archive record exists</div></div><label class="toggle"><input type="checkbox" id="toggle-noarchive" checked><span class="slider"></span></label></div>
     </div>
     <div class="section">
+      <div class="section-title">License</div>
+      <input type="text" id="license-key" class="license-input" placeholder="USERPLY-XXXX-XXXX-XXXX">
+      <div class="license-help">Pro unlocks Newest and Oldest sorting for visible Google results.</div>
+      <div class="license-actions">
+        <div class="license-status" id="license-status">Plan: Free</div>
+        <button id="verify-save-btn" class="verify-save-btn">Verify &amp; Save</button>
+      </div>
+    </div>
+    <div class="section">
       <div class="section-title">Disabled Sites</div>
       <p style="font-size:12px;color:#64748b;margin-bottom:12px;">The extension will not run on these domains.</p>
       <ul class="disabled-site-list" id="disabled-list"></ul>
@@ -57,7 +73,7 @@
     </div>
     <div class="section">
       <div class="section-title">Data</div>
-      <div class="setting-row"><div><div class="setting-label">Clear verification cache</div><div class="setting-desc">Remove all cached date verification results</div></div><button id="clear-cache" style="background:#1e293b;color:#f87171;border:1px solid rgba(248,113,113,0.3);border-radius:6px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;">Clear</button></div>
+      <div class="setting-row"><div><div class="setting-label">Clear verification cache</div><div class="setting-desc">Remove all cached date verification results</div></div><button id="clear-cache">Clear</button></div>
     </div>
   </div>
   <div class="saved-msg" id="saved-msg">Settings saved</div>
