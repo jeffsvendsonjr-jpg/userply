@@ -2,7 +2,7 @@
   'use strict';
   const SETTINGS_KEY = 'userply_settings';
   const LICENSE_KEY_STORAGE = 'licenseKey';
-  const defaults = { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
+  const defaults = { enabled: true, pillPosition: 'below', showDiagnosticNoDate: false, disabledSites: [] };
   function load() { try { const raw = localStorage.getItem(SETTINGS_KEY); return raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults }; } catch { return { ...defaults }; } }
   function save(settings) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); showSaved(); }
   function showSaved() { const msg = document.getElementById('saved-msg'); msg.classList.add('show'); setTimeout(function() { msg.classList.remove('show'); }, 1500); }
@@ -23,11 +23,11 @@
   var settings = load();
   document.getElementById('toggle-enabled').checked = settings.enabled;
   document.getElementById('pill-position').value = settings.pillPosition;
-  document.getElementById('toggle-noarchive').checked = settings.showNoArchive;
+  document.getElementById('toggle-diagnostic-nodate').checked = settings.showDiagnosticNoDate;
   renderDisabledList(settings);
   document.getElementById('toggle-enabled').addEventListener('change', function(e) { settings.enabled = e.target.checked; save(settings); });
   document.getElementById('pill-position').addEventListener('change', function(e) { settings.pillPosition = e.target.value; save(settings); });
-  document.getElementById('toggle-noarchive').addEventListener('change', function(e) { settings.showNoArchive = e.target.checked; save(settings); });
+  document.getElementById('toggle-diagnostic-nodate').addEventListener('change', function(e) { settings.showDiagnosticNoDate = e.target.checked; save(settings); });
   document.getElementById('add-site-btn').addEventListener('click', function() {
     var input = document.getElementById('new-site');
     var site = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
