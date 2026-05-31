@@ -263,6 +263,7 @@
   const US_DATE_RE = /\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/;
   const REL_DATE_RE = /\b(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago\b/i;
   const TODAY_RE = /\b(today|yesterday)\b/i;
+  const MS_PER_DAY = 86400000;
 
   function extractTextDate(text, source) {
     if (!text) return null;
@@ -283,7 +284,7 @@
       const d = new Date();
       d.setUTCHours(12, 0, 0, 0);
       const offsetDays = todayish[1].toLowerCase() === 'yesterday' ? 1 : 0;
-      return createDateSignal(new Date(d.getTime() - offsetDays * 864e5).toISOString(), source || 'Visible date', 'day');
+      return createDateSignal(new Date(d.getTime() - offsetDays * MS_PER_DAY).toISOString(), source || 'Visible date', 'day');
     }
     const rel = REL_DATE_RE.exec(text);
     if (rel) {
@@ -295,7 +296,7 @@
       else if (unit === 'hour') d.setUTCHours(d.getUTCHours() - amount);
       else if (unit === 'day' || unit === 'week') {
         const dayCount = unit === 'week' ? amount * 7 : amount;
-        d.setTime(d.getTime() - dayCount * 864e5);
+        d.setTime(d.getTime() - dayCount * MS_PER_DAY);
       }
       else if (unit === 'month') d.setUTCMonth(d.getUTCMonth() - amount);
       else if (unit === 'year') d.setUTCFullYear(d.getUTCFullYear() - amount);
@@ -509,9 +510,12 @@
         case 'first_seen':
           text = `First seen: ${formatDate(result.first_seen)}`;
           break;
-        case 'corrected':
-          text = `Date conflict: ${formatDate(result.actual_date || result.first_seen)} vs ${formatDate(result.claimed_date)}`;
+        case 'corrected': {
+          const archiveDate = formatDate(result.actual_date || result.first_seen);
+          const claimedDate = formatDate(result.claimed_date);
+          text = archiveDate && claimedDate ? `Date conflict: ${archiveDate} vs ${claimedDate}` : 'Date conflict';
           break;
+        }
         case 'no_archive':
           if (!getDebugModeEnabled()) return;
           text = 'No archive record';
