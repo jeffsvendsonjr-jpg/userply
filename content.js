@@ -13,13 +13,14 @@
   const CACHE_TTL = 86400000;
 
   const SETTINGS_KEY = 'userply_settings';
+  const DEFAULT_SETTINGS = { enabled: true, pillPosition: 'below', showDiagnosticNoDate: false, disabledSites: [] };
 
   function getSettings() {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
-      if (!raw) return { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] };
-      return { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [], ...JSON.parse(raw) };
-    } catch { return { enabled: true, pillPosition: 'below', showNoArchive: true, disabledSites: [] }; }
+      if (!raw) return { ...DEFAULT_SETTINGS };
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    } catch { return { ...DEFAULT_SETTINGS }; }
   }
 
   function isDisabledSite() {
@@ -172,17 +173,20 @@
   }
 
   function createPill(text, status, debugText) { return createIsolatedPill(text, status, null, debugText); }
-  function createUnverifiedPill(dateStr, source) { return createIsolatedPill(`${source || 'Visible date'}: ${dateStr}`, 'first_seen', null, source ? `userp.ly date source: ${source}` : null); }
+  function createUnverifiedPill(dateStr, source) { return createIsolatedPill(dateStr, 'first_seen', null, source ? `userp.ly date source: ${source}` : null); }
 
-  function formatDate(iso) {
+  function formatDate(iso, precision) {
     if (!iso) return null;
-    try { const d = new Date(iso); if (isNaN(d.getTime())) return null; return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return null; }
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      if (precision === 'year') return d.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'UTC' });
+      if (precision === 'month') return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    } catch { return null; }
   }
 
-  const URL_DATE_PATTERNS = [
-    /[\/\-_](20\d{2})[\/\-_](\d{1,2})[\/\-_](\d{1,2})(?:[\/\-_\?#]|$)/,
-    /[\/\-_](20\d{2})(\d{2})(\d{2})(?:[\/\-_\?#]|$)/,
-  ];
+  const DATE_QUERY_KEYS = ['date', 'published', 'updated', 'modified'];
 
   function toIsoDate(y, mo, d) {
     y = Number(y); mo = Number(mo); d = Number(d);
@@ -192,62 +196,168 @@
     return isNaN(dt.getTime()) ? null : dt.toISOString();
   }
 
-  function extractUrlDate(url) {
+  function createDateSignal(iso, source, precision = 'day', kind = 'claimed') {
+    return iso ? { iso, source, precision, kind, useful: true } : null;
+  }
+
+  function toMonthIsoDate(y, mo) {
+    return toIsoDate(y, mo, 1);
+  }
+
+  function toYearIsoDate(y) {
+    return toIsoDate(y, 1, 1);
+  }
+
+  function parseDateValue(text, precision) {
+    if (!text) return null;
+    if (precision === 'year') return toYearIsoDate(text);
+    if (precision === 'month') {
+      const monthMatch = /^(\d{4})-(\d{2})$/.exec(text);
+      if (!monthMatch) return null;
+      return toMonthIsoDate(monthMatch[1], monthMatch[2]);
+    }
+    const dayMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    return dayMatch ? toIsoDate(dayMatch[1], dayMatch[2], dayMatch[3]) : null;
+  }
+
+  function extractUrlPathDate(url) {
     try {
-      for (const re of URL_DATE_PATTERNS) {
-        const m = re.exec(url);
-        if (!m) continue;
-        const iso = toIsoDate(m[1], m[2], m[3]);
-        if (iso) return iso;
+      const pathname = new URL(url).pathname;
+      let match = pathname.match(/(?:^|\/)(20\d{2})\/(\d{1,2})\/(\d{1,2})(?:\/|$)/);
+      if (match) return createDateSignal(toIsoDate(match[1], match[2], match[3]), 'URL path date', 'day');
+      match = pathname.match(/(?:^|\/)(20\d{2})-(\d{2})-(\d{2})(?:\/|$)/);
+      if (match) return createDateSignal(toIsoDate(match[1], match[2], match[3]), 'URL path date', 'day');
+      match = pathname.match(/(?:^|\/)(20\d{2})(\d{2})(\d{2})(?:\/|$)/);
+      if (match) return createDateSignal(toIsoDate(match[1], match[2], match[3]), 'URL path date', 'day');
+      match = pathname.match(/(?:^|\/)(20\d{2})\/(\d{2})(?:\/|$)/);
+      if (match) return createDateSignal(toMonthIsoDate(match[1], match[2]), 'URL path date', 'month');
+      match = pathname.match(/(?:^|\/)(20\d{2})(?:\/|$)/);
+      if (match) return createDateSignal(toYearIsoDate(match[1]), 'URL path date', 'year');
+    } catch { }
+    return null;
+  }
+
+  function extractUrlQueryDate(url) {
+    try {
+      const parsed = new URL(url);
+      for (const key of DATE_QUERY_KEYS) {
+        const value = parsed.searchParams.get(key);
+        if (!value) continue;
+        const iso = parseDateValue(value.trim(), 'day');
+        if (iso) return createDateSignal(iso, `URL ${key} query`, 'day');
       }
     } catch { }
     return null;
   }
 
+  function extractUrlDate(url) {
+    return extractUrlPathDate(url) || extractUrlQueryDate(url);
+  }
+
   const MONTHS_PAT = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December';
-  const ABS_DATE_RE = new RegExp(`(${MONTHS_PAT})\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})`, 'i');
-  const ABS_DATE_RE_2 = new RegExp(`(\\d{1,2})\\s+(${MONTHS_PAT})\\s+(\\d{4})`, 'i');
-  const NUMERIC_DATE_RE = /\b(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\b|\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2})\b/;
-  const REL_DATE_RE = /(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i;
+  const LABELED_ABS_DATE_RE = new RegExp(`\\b(?:Updated|Published)\\s+(${MONTHS_PAT})\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})`, 'i');
+  const ABS_DATE_RE = new RegExp(`\\b(${MONTHS_PAT})\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})`, 'i');
+  const ABS_DATE_RE_2 = new RegExp(`\\b(\\d{1,2})\\s+(${MONTHS_PAT})\\s+(\\d{4})`, 'i');
+  const MONTH_YEAR_RE = new RegExp(`\\b(?:(?:Updated|Published)\\s+)?(${MONTHS_PAT})\\s+(\\d{4})\\b`, 'i');
+  const ISO_DATE_RE = /\b(20\d{2})-(\d{2})-(\d{2})\b/;
+  const US_DATE_RE = /\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/;
+  const REL_DATE_RE = /\b(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago\b/i;
   const TODAY_RE = /\b(today|yesterday)\b/i;
 
-  function extractTextDate(text) {
+  function extractTextDate(text, source) {
     if (!text) return null;
+    const labeled = LABELED_ABS_DATE_RE.exec(text);
+    if (labeled) return createDateSignal(toIsoDate(labeled[3], new Date(`${labeled[1]} 1, 2000`).getMonth() + 1, labeled[2]), source || 'Visible date', 'day');
     const abs = ABS_DATE_RE.exec(text);
-    if (abs) { const d = new Date(`${abs[1]} ${abs[2]}, ${abs[3]}`); if (!isNaN(d.getTime())) return d.toISOString(); }
+    if (abs) return createDateSignal(toIsoDate(abs[3], new Date(`${abs[1]} 1, 2000`).getMonth() + 1, abs[2]), source || 'Visible date', 'day');
     const abs2 = ABS_DATE_RE_2.exec(text);
-    if (abs2) { const d = new Date(`${abs2[2]} ${abs2[1]}, ${abs2[3]}`); if (!isNaN(d.getTime())) return d.toISOString(); }
-    const num = NUMERIC_DATE_RE.exec(text);
-    if (num) {
-      const y = num[1] || num[6];
-      const mo = num[2] || num[4];
-      const day = num[3] || num[5];
-      const d = new Date(`${y}-${String(mo).padStart(2,'0')}-${String(day).padStart(2,'0')}T12:00:00Z`);
-      if (!isNaN(d.getTime())) return d.toISOString();
-    }
+    if (abs2) return createDateSignal(toIsoDate(abs2[3], new Date(`${abs2[2]} 1, 2000`).getMonth() + 1, abs2[1]), source || 'Visible date', 'day');
+    const monthYear = MONTH_YEAR_RE.exec(text);
+    if (monthYear) return createDateSignal(toMonthIsoDate(monthYear[2], new Date(`${monthYear[1]} 1, 2000`).getMonth() + 1), source || 'Visible date', 'month');
+    const iso = ISO_DATE_RE.exec(text);
+    if (iso) return createDateSignal(toIsoDate(iso[1], iso[2], iso[3]), source || 'Visible date', 'day');
+    const us = US_DATE_RE.exec(text);
+    if (us) return createDateSignal(toIsoDate(us[3], us[1], us[2]), source || 'Visible date', 'day');
     const todayish = TODAY_RE.exec(text);
-    if (todayish) { const now = Date.now(); return new Date(todayish[1].toLowerCase() === 'yesterday' ? now - 864e5 : now).toISOString(); }
+    if (todayish) {
+      const d = new Date();
+      d.setUTCHours(12, 0, 0, 0);
+      const offsetDays = todayish[1].toLowerCase() === 'yesterday' ? 1 : 0;
+      return createDateSignal(new Date(d.getTime() - offsetDays * 864e5).toISOString(), source || 'Visible date', 'day');
+    }
     const rel = REL_DATE_RE.exec(text);
-    if (rel) { const msMap = { second: 1000, minute: 60000, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 }; const ms = msMap[rel[2].toLowerCase()]; if (ms) return new Date(Date.now() - parseInt(rel[1], 10) * ms).toISOString(); }
+    if (rel) {
+      const d = new Date();
+      const amount = parseInt(rel[1], 10);
+      const unit = rel[2].toLowerCase();
+      if (unit === 'second') d.setUTCSeconds(d.getUTCSeconds() - amount);
+      else if (unit === 'minute') d.setUTCMinutes(d.getUTCMinutes() - amount);
+      else if (unit === 'hour') d.setUTCHours(d.getUTCHours() - amount);
+      else if (unit === 'day' || unit === 'week') {
+        const dayCount = unit === 'week' ? amount * 7 : amount;
+        d.setTime(d.getTime() - dayCount * 864e5);
+      }
+      else if (unit === 'month') d.setUTCMonth(d.getUTCMonth() - amount);
+      else if (unit === 'year') d.setUTCFullYear(d.getUTCFullYear() - amount);
+      d.setUTCHours(12, 0, 0, 0);
+      return createDateSignal(d.toISOString(), source || 'Visible date', 'day');
+    }
     return null;
   }
 
   function extractSnippetDate(container, engine) {
     const config = getEngineConfig(engine);
     const selectors = config ? config.snippetSelectors : ['.VwiC3b', '.s3v9rd', '.IsZvec', '.yDYNvb', '.MUxGbd', '.r025kc'];
-    for (const sel of selectors) { try { const el = container.querySelector(sel); if (el) { const iso = extractTextDate(el.textContent); if (iso) return iso; } } catch { } }
-    return extractTextDate(container.textContent);
+    for (const sel of selectors) {
+      try {
+        const el = container.querySelector(sel);
+        if (!el) continue;
+        const signal = extractTextDate(el.textContent, 'Google visible date');
+        if (signal) return signal;
+      } catch { }
+    }
+    return null;
   }
 
-  function getClaimedDate(container, url, engine) {
-    const urlDate = extractUrlDate(url);
-    if (urlDate) return { iso: urlDate, source: 'URL date' };
-    const visibleDate = extractSnippetDate(container, engine);
-    if (visibleDate) {
-      const label = 'Google visible date';
-      return { iso: visibleDate, source: label };
+  function extractBreadcrumbDate(container) {
+    const selectors = ['cite', '[role="link"] cite', '.iUh30', '.tjvcx', '.TbwUpd', '[data-dtld]', '[data-testid*="breadcrumb"]'];
+    for (const sel of selectors) {
+      try {
+        const el = container.querySelector(sel);
+        if (!el) continue;
+        const signal = extractTextDate(el.textContent, 'Breadcrumb date');
+        if (signal) return signal;
+      } catch { }
     }
-    return { iso: null, source: null };
+    return null;
+  }
+
+  function extractVerificationDateSignal(result) {
+    if (!result) return null;
+    if (result.actual_date) {
+      const actual = new Date(result.actual_date);
+      if (!isNaN(actual.getTime())) return createDateSignal(actual.toISOString(), 'Verified date', 'day', 'verified');
+    }
+    if (result.first_seen) {
+      const firstSeen = new Date(result.first_seen);
+      if (!isNaN(firstSeen.getTime())) return createDateSignal(firstSeen.toISOString(), 'Archive first seen', 'day', 'first_seen');
+    }
+    if (result.claimed_date) {
+      const claimed = new Date(result.claimed_date);
+      if (!isNaN(claimed.getTime())) return createDateSignal(claimed.toISOString(), 'Verified claimed date', 'day', 'verified');
+    }
+    return null;
+  }
+
+  function findBestDateSignal(container, titleEl, url, verificationResult) {
+    return extractSnippetDate(container, detectEngine())
+      || extractTextDate(titleEl && titleEl.textContent, 'Title date')
+      || extractTextDate(container && container.textContent, 'Visible result date')
+      || extractBreadcrumbDate(container)
+      || extractUrlPathDate(url)
+      || extractUrlQueryDate(url)
+      || extractVerificationDateSignal(verificationResult)
+      || null;
   }
 
   function normalizeApiResult(result) {
@@ -369,24 +479,47 @@
     if (container) container.insertBefore(wrapper, container.firstChild || null);
   }
 
-  function injectVerificationPill(titleEl, result, container) {
-    if (container) { const existing = container.querySelector('[data-userply-wrapper]'); if (existing) existing.remove(); }
-    const existingInTitle = titleEl.querySelector('[data-userply]');
+  function getDebugModeEnabled() {
+    return Boolean(getSettings().showDiagnosticNoDate);
+  }
+
+  function removeInjectedPill(container, titleEl) {
+    if (container) {
+      const existing = container.querySelector('[data-userply-wrapper]');
+      if (existing) existing.remove();
+    }
+    const existingInTitle = titleEl && titleEl.querySelector ? titleEl.querySelector('[data-userply]') : null;
     if (existingInTitle) existingInTitle.remove();
+  }
+
+  function injectVerificationPill(titleEl, result, container, bestSignal) {
+    removeInjectedPill(container, titleEl);
     const settings = getSettings();
-    if (result && (result.status === 'no_archive' || result.status === 'no_date') && !settings.showNoArchive) return;
-    const sortableDate = getResultSortDate(result);
-    if (sortableDate) setSortDate(container || titleEl, sortableDate);
+    if (bestSignal && bestSignal.iso) setSortDate(container || titleEl, bestSignal.iso);
     let pill;
-    if (!result) { pill = createPill('No date', 'no_date'); }
-    else {
+    if (!result) {
+      if (!getDebugModeEnabled()) return;
+      pill = createPill('No date', 'no_date');
+    } else {
       let text = ''; let status = result.status;
       switch (result.status) {
-        case 'verified': text = `Verified: ${formatDate(result.actual_date || result.first_seen)}`; break;
-        case 'first_seen': text = `First seen: ${formatDate(result.first_seen)}`; break;
-        case 'corrected': text = `Date conflict: First seen ${formatDate(result.first_seen)} (claims ${formatDate(result.claimed_date)})`; break;
-        case 'no_archive': text = 'No archive record'; break;
-        default: text = 'No date'; status = 'no_date';
+        case 'verified':
+          text = formatDate(bestSignal && bestSignal.iso ? bestSignal.iso : (result.actual_date || result.first_seen), bestSignal && bestSignal.precision);
+          break;
+        case 'first_seen':
+          text = `First seen: ${formatDate(result.first_seen)}`;
+          break;
+        case 'corrected':
+          text = `Date conflict: ${formatDate(result.actual_date || result.first_seen)} vs ${formatDate(result.claimed_date)}`;
+          break;
+        case 'no_archive':
+          if (!getDebugModeEnabled()) return;
+          text = 'No archive record';
+          break;
+        default:
+          if (!getDebugModeEnabled()) return;
+          text = 'No date';
+          status = 'no_date';
       }
       pill = createPill(text, status, result && result._debugUrl ? getDebugText(result._debugUrl, result, result._debugSource) : null);
       if (result.confidence && result.confidence < 0.5) pill.style.opacity = '0.7';
@@ -399,13 +532,12 @@
     placeBadgeWrapper(container, titleEl, wrapper);
   }
 
-  function injectLocalDatePill(titleEl, isoDate, container, source) {
-    if (container) { const existing = container.querySelector('[data-userply-wrapper]'); if (existing) existing.remove(); }
-    const existingInTitle = titleEl.querySelector('[data-userply]');
-    if (existingInTitle) existingInTitle.remove();
+  function injectLocalDatePill(titleEl, signal, container) {
+    if (!signal || !signal.iso) return;
+    removeInjectedPill(container, titleEl);
     const settings = getSettings();
-    setSortDate(container || titleEl, isoDate);
-    const pill = createUnverifiedPill(formatDate(isoDate) || isoDate, source || 'Visible date');
+    setSortDate(container || titleEl, signal.iso);
+    const pill = createUnverifiedPill(formatDate(signal.iso, signal.precision) || signal.iso, signal.source || 'Visible date');
     const isInline = settings.pillPosition === 'inline';
     const wrapper = document.createElement(isInline ? 'span' : 'div');
     wrapper.setAttribute('data-userply-wrapper', '1');
@@ -422,8 +554,8 @@
     PROCESSED_CONTAINERS.add(container);
     container.setAttribute('data-userply-processed', '1');
     try {
-      const claimed = getClaimedDate(container, url, engine);
-      const claimedDate = claimed.iso;
+      const bestLocalSignal = findBestDateSignal(container, titleEl, url);
+      const claimedDate = bestLocalSignal && bestLocalSignal.iso;
       const placeholderWrapper = document.createElement('div');
       placeholderWrapper.setAttribute('data-userply-wrapper', '1');
       placeholderWrapper.style.cssText = 'display:block;width:max-content;margin:4px 0 0 0;transform:none!important;rotate:0deg!important;scale:1!important;direction:ltr!important;unicode-bidi:isolate!important;writing-mode:horizontal-tb!important;text-align:left!important;isolation:isolate!important;';
@@ -435,16 +567,19 @@
         placeBadgeWrapper(container, titleEl, placeholderWrapper);
       }
       const result = normalizeApiResult(await verifyDate(url, claimedDate));
+      const bestSignal = findBestDateSignal(container, titleEl, url, result);
       if (placeholderWrapper.parentElement) placeholderWrapper.remove();
       if (!result) {
-        if (claimedDate) { injectLocalDatePill(titleEl, claimedDate, container, claimed.source); }
-        else { injectVerificationPill(titleEl, { status: 'no_date' }, container); }
+        if (bestSignal) { injectLocalDatePill(titleEl, bestSignal, container); }
+        else { injectVerificationPill(titleEl, { status: 'no_date' }, container, null); }
       } else if (claimedDate && (result.status === 'no_archive' || result.status === 'no_date') && !result.first_seen && !result.actual_date) {
-        injectLocalDatePill(titleEl, claimedDate, container, claimed.source);
+        injectLocalDatePill(titleEl, bestSignal || bestLocalSignal, container);
+      } else if (!bestSignal && (result.status === 'no_archive' || result.status === 'no_date')) {
+        injectVerificationPill(titleEl, result, container, null);
       } else {
         result._debugUrl = url;
-        result._debugSource = result.actual_date || result.first_seen ? 'verification API' : (claimed.source || 'verification API');
-        injectVerificationPill(titleEl, result, container);
+        result._debugSource = result.actual_date || result.first_seen ? 'verification API' : ((bestSignal && bestSignal.source) || 'verification API');
+        injectVerificationPill(titleEl, result, container, bestSignal || bestLocalSignal);
       }
       repairFlippedSearchText();
     } catch { const ph = container.querySelector('[data-userply-wrapper]'); if (ph) ph.remove(); }
@@ -731,6 +866,7 @@
     if (!searchContainer) return;
     const children = getSortableChildren(searchContainer);
     const original = syncOriginalOrder(children);
+    const originalIndexMap = new Map(original.map((el, index) => [el, index]));
     enforceSortAccess();
 
     if (SORT_STATE === SORT_MODE_NORMAL) {
@@ -742,12 +878,13 @@
 
     const sorted = children.map((el, index) => ({
       el,
-      index,
+      index: originalIndexMap.has(el) ? originalIndexMap.get(el) : index,
       time: parsePillDate(el)?.getTime() ?? null,
     })).sort((a, b) => {
       if (a.time === null && b.time === null) return a.index - b.index;
       if (a.time === null) return 1;
       if (b.time === null) return -1;
+      if (a.time === b.time) return a.index - b.index;
       return SORT_STATE === SORT_MODE_NEWEST ? b.time - a.time : a.time - b.time;
     });
 
@@ -768,7 +905,7 @@
     if (!existing) {
       const controls = document.createElement('div');
       controls.id = 'userply-sort';
-      controls.style.cssText = 'display:flex;gap:8px;align-items:center;margin:8px 0;font-family:Arial,sans-serif;';
+      controls.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0;font-family:Arial,sans-serif;';
 
       const makeBtn = (label, mode) => {
         const btn = document.createElement('button');
@@ -788,6 +925,10 @@
       controls.appendChild(makeBtn('Normal', SORT_MODE_NORMAL));
       controls.appendChild(makeBtn('Newest', SORT_MODE_NEWEST));
       controls.appendChild(makeBtn('Oldest', SORT_MODE_OLDEST));
+      const helper = document.createElement('span');
+      helper.textContent = 'Sorting applies to visible results on this page.';
+      helper.style.cssText = 'font-size:12px;line-height:1.4;color:#64748b;';
+      controls.appendChild(helper);
       searchContainer.parentElement.insertBefore(controls, searchContainer);
     }
 
