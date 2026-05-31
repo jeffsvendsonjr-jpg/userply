@@ -132,7 +132,7 @@
     switch (status) {
       case 'verified':   return 'Date verified by archive';
       case 'first_seen': return 'First seen date from archive';
-      case 'corrected':  return 'Date mismatch detected';
+      case 'corrected':  return 'Date conflict';
       case 'no_archive': return 'No archive record found';
       case 'locked':     return 'Upgrade required for verification';
       default:           return 'Date information';
@@ -226,7 +226,7 @@
       if (!isNaN(d.getTime())) return d.toISOString();
     }
     const todayish = TODAY_RE.exec(text);
-    if (todayish) { const d = new Date(); if (todayish[1].toLowerCase() === 'yesterday') d.setDate(d.getDate() - 1); return d.toISOString(); }
+    if (todayish) { const now = Date.now(); return new Date(todayish[1].toLowerCase() === 'yesterday' ? now - 864e5 : now).toISOString(); }
     const rel = REL_DATE_RE.exec(text);
     if (rel) { const msMap = { second: 1000, minute: 60000, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 }; const ms = msMap[rel[2].toLowerCase()]; if (ms) return new Date(Date.now() - parseInt(rel[1], 10) * ms).toISOString(); }
     return null;
@@ -384,7 +384,7 @@
       switch (result.status) {
         case 'verified': text = `Verified: ${formatDate(result.actual_date || result.first_seen)}`; break;
         case 'first_seen': text = `First seen: ${formatDate(result.first_seen)}`; break;
-        case 'corrected': text = `First seen ${formatDate(result.first_seen)} (claims ${formatDate(result.claimed_date)})`; break;
+        case 'corrected': text = `Date conflict: First seen ${formatDate(result.first_seen)} (claims ${formatDate(result.claimed_date)})`; break;
         case 'no_archive': text = 'No archive record'; break;
         default: text = 'No date'; status = 'no_date';
       }
