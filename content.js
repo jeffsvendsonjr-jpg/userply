@@ -313,7 +313,7 @@
       try {
         const el = container.querySelector(sel);
         if (!el) continue;
-        const signal = extractTextDate(el.textContent, 'Google visible date');
+        const signal = extractTextDate(el.textContent, 'SERP snippet date');
         if (signal) return signal;
       } catch { }
     }
@@ -343,22 +343,25 @@
       const firstSeen = new Date(result.first_seen);
       if (!isNaN(firstSeen.getTime())) return createDateSignal(firstSeen.toISOString(), 'Archive first seen', 'day', 'first_seen');
     }
-    if (result.claimed_date) {
-      const claimed = new Date(result.claimed_date);
-      if (!isNaN(claimed.getTime())) return createDateSignal(claimed.toISOString(), 'Verified claimed date', 'day', 'verified');
-    }
     return null;
   }
 
-  function findBestDateSignal(container, titleEl, url, verificationResult) {
+  function findVisibleSerpDateSignal(container, titleEl) {
     return extractSnippetDate(container, detectEngine())
-      || extractTextDate(titleEl && titleEl.textContent, 'Title date')
-      || extractTextDate(container && container.textContent, 'Visible result date')
       || extractBreadcrumbDate(container)
+      || extractTextDate(titleEl && titleEl.textContent, 'Title text date')
+      || null;
+  }
+
+  function findIndependentDateSignal(url, verificationResult) {
+    return extractVerificationDateSignal(verificationResult)
       || extractUrlPathDate(url)
       || extractUrlQueryDate(url)
-      || extractVerificationDateSignal(verificationResult)
       || null;
+  }
+
+  function chooseDisplayDateSignal(visibleSignal, independentSignal) {
+    return independentSignal || visibleSignal || null;
   }
 
   function normalizeApiResult(result) {
@@ -505,7 +508,7 @@
       let text = ''; let status = result.status;
       switch (result.status) {
         case 'verified':
-          text = formatDate(bestSignal && bestSignal.iso ? bestSignal.iso : (result.actual_date || result.first_seen), bestSignal && bestSignal.precision);
+          text = formatDate(result.actual_date || result.first_seen);
           break;
         case 'first_seen':
           text = `First seen: ${formatDate(result.first_seen)}`;
@@ -558,8 +561,8 @@
     PROCESSED_CONTAINERS.add(container);
     container.setAttribute('data-userply-processed', '1');
     try {
-      const bestLocalSignal = findBestDateSignal(container, titleEl, url);
-      const claimedDate = bestLocalSignal && bestLocalSignal.iso;
+      const visibleSignal = findVisibleSerpDateSignal(container, titleEl);
+      const claimedDate = visibleSignal && visibleSignal.iso;
       const placeholderWrapper = document.createElement('div');
       placeholderWrapper.setAttribute('data-userply-wrapper', '1');
       placeholderWrapper.style.cssText = 'display:block;width:max-content;margin:4px 0 0 0;transform:none!important;rotate:0deg!important;scale:1!important;direction:ltr!important;unicode-bidi:isolate!important;writing-mode:horizontal-tb!important;text-align:left!important;isolation:isolate!important;';
@@ -571,19 +574,28 @@
         placeBadgeWrapper(container, titleEl, placeholderWrapper);
       }
       const result = normalizeApiResult(await verifyDate(url, claimedDate));
-      const bestSignal = findBestDateSignal(container, titleEl, url, result);
+      const independentSignal = findIndependentDateSignal(url, result);
+      const bestSignal = chooseDisplayDateSignal(visibleSignal, independentSignal);
       if (placeholderWrapper.parentElement) placeholderWrapper.remove();
       if (!result) {
         if (bestSignal) { injectLocalDatePill(titleEl, bestSignal, container); }
         else { injectVerificationPill(titleEl, { status: 'no_date' }, container, null); }
-      } else if (claimedDate && (result.status === 'no_archive' || result.status === 'no_date') && !result.first_seen && !result.actual_date) {
-        injectLocalDatePill(titleEl, bestSignal || bestLocalSignal, container);
+      } else if (result.actual_date || result.first_seen) {
+        result._debugUrl = url;
+        result._debugSource = 'verification API';
+        injectVerificationPill(titleEl, result, container, bestSignal);
+      } else if (result.status === 'corrected') {
+        result._debugUrl = url;
+        result._debugSource = 'verification API';
+        injectVerificationPill(titleEl, result, container, bestSignal);
+      } else if (bestSignal) {
+        injectLocalDatePill(titleEl, bestSignal, container);
       } else if (!bestSignal && (result.status === 'no_archive' || result.status === 'no_date')) {
         injectVerificationPill(titleEl, result, container, null);
       } else {
         result._debugUrl = url;
-        result._debugSource = result.actual_date || result.first_seen ? 'verification API' : ((bestSignal && bestSignal.source) || 'verification API');
-        injectVerificationPill(titleEl, result, container, bestSignal || bestLocalSignal);
+        result._debugSource = (bestSignal && bestSignal.source) || 'verification API';
+        injectVerificationPill(titleEl, result, container, bestSignal);
       }
       repairFlippedSearchText();
     } catch { const ph = container.querySelector('[data-userply-wrapper]'); if (ph) ph.remove(); }
