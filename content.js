@@ -133,7 +133,7 @@
     switch (status) {
       case 'verified':   return 'Date verified by archive';
       case 'first_seen': return 'First seen date from archive';
-      case 'corrected':  return 'Date mismatch detected';
+      case 'corrected':  return 'Date conflict';
       case 'no_archive': return 'No archive record found';
       case 'locked':     return 'Upgrade required for verification';
       default:           return 'Date information';
@@ -263,6 +263,7 @@
   const US_DATE_RE = /\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/;
   const REL_DATE_RE = /\b(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago\b/i;
   const TODAY_RE = /\b(today|yesterday)\b/i;
+  const MS_PER_DAY = 86400000;
 
   function extractTextDate(text, source) {
     if (!text) return null;
@@ -281,9 +282,9 @@
     const todayish = TODAY_RE.exec(text);
     if (todayish) {
       const d = new Date();
-      if (todayish[1].toLowerCase() === 'yesterday') d.setUTCDate(d.getUTCDate() - 1);
       d.setUTCHours(12, 0, 0, 0);
-      return createDateSignal(d.toISOString(), source || 'Visible date', 'day');
+      const offsetDays = todayish[1].toLowerCase() === 'yesterday' ? 1 : 0;
+      return createDateSignal(new Date(d.getTime() - offsetDays * MS_PER_DAY).toISOString(), source || 'Visible date', 'day');
     }
     const rel = REL_DATE_RE.exec(text);
     if (rel) {
@@ -293,8 +294,10 @@
       if (unit === 'second') d.setUTCSeconds(d.getUTCSeconds() - amount);
       else if (unit === 'minute') d.setUTCMinutes(d.getUTCMinutes() - amount);
       else if (unit === 'hour') d.setUTCHours(d.getUTCHours() - amount);
-      else if (unit === 'day') d.setUTCDate(d.getUTCDate() - amount);
-      else if (unit === 'week') d.setUTCDate(d.getUTCDate() - amount * 7);
+      else if (unit === 'day' || unit === 'week') {
+        const dayCount = unit === 'week' ? amount * 7 : amount;
+        d.setTime(d.getTime() - dayCount * MS_PER_DAY);
+      }
       else if (unit === 'month') d.setUTCMonth(d.getUTCMonth() - amount);
       else if (unit === 'year') d.setUTCFullYear(d.getUTCFullYear() - amount);
       d.setUTCHours(12, 0, 0, 0);
@@ -507,9 +510,12 @@
         case 'first_seen':
           text = `First seen: ${formatDate(result.first_seen)}`;
           break;
-        case 'corrected':
-          text = `Mismatch: ${formatDate(result.actual_date || result.first_seen)} vs ${formatDate(result.claimed_date)}`;
+        case 'corrected': {
+          const archiveDate = formatDate(result.actual_date || result.first_seen);
+          const claimedDate = formatDate(result.claimed_date);
+          text = archiveDate && claimedDate ? `Date conflict: ${archiveDate} vs ${claimedDate}` : 'Date conflict';
           break;
+        }
         case 'no_archive':
           if (!getDebugModeEnabled()) return;
           text = 'No archive record';
