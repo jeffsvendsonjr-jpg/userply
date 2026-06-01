@@ -27,7 +27,7 @@ function getVerifyBackoffRemaining() {
 }
 
 function applyVerifyBackoff(ms = VERIFY_TRANSIENT_BACKOFF_MS) {
-  verifyBackoffUntil = Math.max(verifyBackoffUntil, Date.now() + Math.max(ms, VERIFY_TRANSIENT_BACKOFF_MS));
+  verifyBackoffUntil = Math.max(verifyBackoffUntil, Date.now() + ms);
 }
 
 chrome.runtime.onInstalled.addListener((details) => {

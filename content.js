@@ -412,7 +412,7 @@
   }
 
   function applyVerifyBackoff(ms = VERIFY_TRANSIENT_BACKOFF_MS) {
-    VERIFY_BACKOFF_UNTIL = Math.max(VERIFY_BACKOFF_UNTIL, Date.now() + Math.max(ms, VERIFY_TRANSIENT_BACKOFF_MS));
+    VERIFY_BACKOFF_UNTIL = Math.max(VERIFY_BACKOFF_UNTIL, Date.now() + ms);
   }
 
   function verifyDateViaBackground(url, claimedDate) {
