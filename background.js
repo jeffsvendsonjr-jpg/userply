@@ -91,8 +91,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
 
       if (!res.ok) {
+        const retryAfterHeaderMs = getRetryAfterMs(res.headers.get('retry-after'));
         const retryAfterMs = res.status === 429
-          ? Math.max(getRetryAfterMs(res.headers.get('retry-after')), VERIFY_RATE_LIMIT_BACKOFF_MS)
+          ? (retryAfterHeaderMs || VERIFY_RATE_LIMIT_BACKOFF_MS)
           : (res.status >= 500 ? VERIFY_TRANSIENT_BACKOFF_MS : 0);
         if (retryAfterMs > 0) applyVerifyBackoff(retryAfterMs);
         sendResponse({ ok: false, status: res.status, retryAfterMs: retryAfterMs || undefined });

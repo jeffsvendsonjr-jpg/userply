@@ -7,7 +7,7 @@
       const host = url.hostname.replace(/^www\./, '');
       if (/google\./i.test(host) && (url.searchParams.has('q') || url.pathname === '/search')) return 'Google';
       if (/bing\./i.test(host) && (url.searchParams.has('q') || url.pathname === '/search')) return 'Bing';
-      if (/duckduckgo\./i.test(host) && url.searchParams.has('q')) return 'DuckDuckGo';
+      if (/duckduckgo\./i.test(host) && url.searchParams.has('q') && (url.pathname === '/' || url.pathname === '/html')) return 'DuckDuckGo';
     } catch { }
     return null;
   }
