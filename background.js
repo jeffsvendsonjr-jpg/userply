@@ -104,7 +104,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true, data });
     } catch (error) {
       applyVerifyBackoff();
-      sendResponse({ ok: false, error: error?.message || 'Unknown error', transportError: true, retryAfterMs: VERIFY_TRANSIENT_BACKOFF_MS });
+      sendResponse({ ok: false, error: error?.message || 'Date verification request failed', transportError: true, retryAfterMs: VERIFY_TRANSIENT_BACKOFF_MS });
     }
   })();
 

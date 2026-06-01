@@ -7,7 +7,6 @@
 
   const PROCESSING = new Set();
   const PROCESSED_URLS = new Set();
-  let PROCESSED_CONTAINERS = new WeakSet();
   const RESULT_CACHE_KEY = 'userply_cache_v6_complete_ddg';
   const ANON_ID_KEY = 'userply_anon_id';
   const CACHE_TTL = 86400000;
@@ -418,7 +417,7 @@
   function verifyDateViaBackground(url, claimedDate) {
     return new Promise((resolve) => {
       try {
-        if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) return resolve({ ok: false, transportError: true });
+        if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) return resolve({ ok: false, transportError: true, error: 'Chrome runtime API unavailable' });
         chrome.runtime.sendMessage(
           { type: 'USERPLY_VERIFY_DATE', url, claimedDate: claimedDate || null, anonymousId: getAnonId() },
           (response) => {
@@ -426,7 +425,7 @@
             resolve(response || { ok: false });
           }
         );
-      } catch (error) { resolve({ ok: false, transportError: true, error: error?.message || 'Unknown error' }); }
+      } catch (error) { resolve({ ok: false, transportError: true, error: error?.message || 'Date verification message failed' }); }
     });
   }
 
@@ -440,7 +439,7 @@
       });
       if (!res.ok) return { ok: false, status: res.status, retryAfterMs: res.status === 429 ? getRetryAfterMs(res.headers.get('retry-after')) : (res.status >= 500 ? VERIFY_TRANSIENT_BACKOFF_MS : 0) };
       return { ok: true, data: await res.json() };
-    } catch (error) { return { ok: false, transportError: true, error: error?.message || 'Unknown error' }; }
+    } catch (error) { return { ok: false, transportError: true, error: error?.message || 'Date verification request failed' }; }
   }
 
   async function verifyDate(url, claimedDate) {
@@ -453,7 +452,8 @@
       if (getVerifyBackoffRemaining() > 0) return null;
       let response = await verifyDateViaBackground(url, claimedDate);
       if (response && response.transportError) {
-        response = await verifyDateDirect(url, claimedDate);
+        const directResponse = await verifyDateDirect(url, claimedDate);
+        response = directResponse;
       }
       if (response && response.ok && response.data) {
         cacheSet(url, response.data);
@@ -591,10 +591,9 @@
 
   async function processResult(container, titleEl, url, engine) {
     if (!container || !titleEl || !url) return;
-    if (PROCESSING.has(url) || PROCESSED_URLS.has(url) || PROCESSED_CONTAINERS.has(container)) return;
+    if (PROCESSING.has(url) || PROCESSED_URLS.has(url) || container.hasAttribute('data-userply-processed')) return;
     PROCESSING.add(url);
     PROCESSED_URLS.add(url);
-    PROCESSED_CONTAINERS.add(container);
     container.setAttribute('data-userply-processed', '1');
     try {
       const visibleSignal = findVisibleSerpDateSignal(container, titleEl);
@@ -746,7 +745,7 @@
         if (seen.has(url) || PROCESSED_URLS.has(url) || PROCESSING.has(url)) return;
         seen.add(url);
         const container = findSafeResultContainer(el, link, strategy);
-        if (!container || PROCESSED_CONTAINERS.has(container) || container.querySelector('[data-userply-wrapper]')) return;
+        if (!container || container.hasAttribute('data-userply-processed') || container.querySelector('[data-userply-wrapper]')) return;
         el.dataset.userplyDone = '1';
         const titleEl = engine === 'duckduckgo'
           ? (container.querySelector('[data-testid="result-title-a"], .result__title a, a.result__a, h2, h3, [role="heading"]') || el)
@@ -1027,7 +1026,6 @@
   function resetProcessedState() {
     PROCESSING.clear();
     PROCESSED_URLS.clear();
-    PROCESSED_CONTAINERS = new WeakSet();
     document.querySelectorAll('[data-userply-done]').forEach((el) => { delete el.dataset.userplyDone; });
     document.querySelectorAll('[data-userply-processed]').forEach((el) => { el.removeAttribute('data-userply-processed'); });
     document.querySelectorAll('[data-userply-wrapper], [data-userply]').forEach((el) => el.remove());

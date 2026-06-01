@@ -8,7 +8,9 @@
       if (/google\./i.test(host) && (url.searchParams.has('q') || url.pathname === '/search')) return 'Google';
       if (/bing\./i.test(host) && (url.searchParams.has('q') || url.pathname === '/search')) return 'Bing';
       if (/duckduckgo\./i.test(host) && url.searchParams.has('q') && (url.pathname === '/' || url.pathname === '/html')) return 'DuckDuckGo';
-    } catch { }
+    } catch {
+      // Ignore non-HTTP browser/internal pages where URL parsing is unsupported.
+    }
     return null;
   }
 
