@@ -7,7 +7,6 @@
 
   const PROCESSING = new Set();
   const PROCESSED_URLS = new Set();
-  const PROCESSED_CONTAINERS = new WeakSet();
   const RESULT_CACHE_KEY = 'userply_cache_v6_complete_ddg';
   const ANON_ID_KEY = 'userply_anon_id';
   const CACHE_TTL = 86400000;
@@ -388,22 +387,45 @@
 
   const QUEUE = [];
   let ACTIVE = 0;
+  let VERIFY_BACKOFF_UNTIL = 0;
+  const VERIFY_RATE_LIMIT_BACKOFF_MS = 60000;
+  const VERIFY_TRANSIENT_BACKOFF_MS = 15000;
   function enqueue(fn) { return new Promise((resolve, reject) => { QUEUE.push(() => fn().then(resolve).catch(reject)); drain(); }); }
   function drain() { while (ACTIVE < 3 && QUEUE.length > 0) { const task = QUEUE.shift(); ACTIVE++; task().finally(() => { ACTIVE--; drain(); }); } }
+
+  function getRetryAfterMs(value) {
+    if (!value) return 0;
+    const seconds = Number(value);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    const retryAt = Date.parse(value);
+    return Number.isNaN(retryAt) ? 0 : Math.max(0, retryAt - Date.now());
+  }
+
+  function getVerifyBackoffRemaining() {
+    const remaining = VERIFY_BACKOFF_UNTIL - Date.now();
+    if (remaining <= 0) {
+      VERIFY_BACKOFF_UNTIL = 0;
+      return 0;
+    }
+    return remaining;
+  }
+
+  function applyVerifyBackoff(ms = VERIFY_TRANSIENT_BACKOFF_MS) {
+    VERIFY_BACKOFF_UNTIL = Math.max(VERIFY_BACKOFF_UNTIL, Date.now() + ms);
+  }
 
   function verifyDateViaBackground(url, claimedDate) {
     return new Promise((resolve) => {
       try {
-        if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) return resolve(null);
+        if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) return resolve({ ok: false, transportError: true, error: 'Chrome runtime API unavailable' });
         chrome.runtime.sendMessage(
           { type: 'USERPLY_VERIFY_DATE', url, claimedDate: claimedDate || null, anonymousId: getAnonId() },
           (response) => {
-            if (chrome.runtime.lastError) return resolve(null);
-            if (!response || !response.ok) return resolve(null);
-            resolve(response.data || null);
+            if (chrome.runtime.lastError) return resolve({ ok: false, transportError: true, error: chrome.runtime.lastError.message });
+            resolve(response || { ok: false });
           }
         );
-      } catch { resolve(null); }
+      } catch (error) { resolve({ ok: false, transportError: true, error: error?.message || 'Date verification message failed' }); }
     });
   }
 
@@ -415,20 +437,34 @@
         body: JSON.stringify({ url, claimed_date: claimedDate || undefined, anonymous_id: getAnonId() }),
         signal: AbortSignal.timeout(15000),
       });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch { return null; }
+      if (!res.ok) return { ok: false, status: res.status, retryAfterMs: res.status === 429 ? getRetryAfterMs(res.headers.get('retry-after')) : (res.status >= 500 ? VERIFY_TRANSIENT_BACKOFF_MS : 0) };
+      return { ok: true, data: await res.json() };
+    } catch (error) { return { ok: false, transportError: true, error: error?.message || 'Date verification request failed' }; }
   }
 
   async function verifyDate(url, claimedDate) {
     const cached = cacheGet(url);
     if (cached !== undefined) return cached;
+    if (getVerifyBackoffRemaining() > 0) return null;
     return enqueue(async () => {
       const c2 = cacheGet(url);
       if (c2 !== undefined) return c2;
-      const data = await verifyDateDirect(url, claimedDate) || await verifyDateViaBackground(url, claimedDate);
-      if (data) cacheSet(url, data);
-      return data;
+      if (getVerifyBackoffRemaining() > 0) return null;
+      let response = await verifyDateViaBackground(url, claimedDate);
+      if (response && response.transportError) {
+        const directResponse = await verifyDateDirect(url, claimedDate);
+        response = directResponse;
+      }
+      if (response && response.ok && response.data) {
+        cacheSet(url, response.data);
+        return response.data;
+      }
+      if (response && (response.status === 429 || response.retryAfterMs)) {
+        applyVerifyBackoff(response.retryAfterMs || VERIFY_RATE_LIMIT_BACKOFF_MS);
+      } else if (response && response.transportError) {
+        applyVerifyBackoff();
+      }
+      return null;
     });
   }
 
@@ -555,10 +591,9 @@
 
   async function processResult(container, titleEl, url, engine) {
     if (!container || !titleEl || !url) return;
-    if (PROCESSING.has(url) || PROCESSED_URLS.has(url) || PROCESSED_CONTAINERS.has(container)) return;
+    if (PROCESSING.has(url) || PROCESSED_URLS.has(url) || container.hasAttribute('data-userply-processed')) return;
     PROCESSING.add(url);
     PROCESSED_URLS.add(url);
-    PROCESSED_CONTAINERS.add(container);
     container.setAttribute('data-userply-processed', '1');
     try {
       const visibleSignal = findVisibleSerpDateSignal(container, titleEl);
@@ -710,7 +745,7 @@
         if (seen.has(url) || PROCESSED_URLS.has(url) || PROCESSING.has(url)) return;
         seen.add(url);
         const container = findSafeResultContainer(el, link, strategy);
-        if (!container || PROCESSED_CONTAINERS.has(container) || container.querySelector('[data-userply-wrapper]')) return;
+        if (!container || container.hasAttribute('data-userply-processed') || container.querySelector('[data-userply-wrapper]')) return;
         el.dataset.userplyDone = '1';
         const titleEl = engine === 'duckduckgo'
           ? (container.querySelector('[data-testid="result-title-a"], .result__title a, a.result__a, h2, h3, [role="heading"]') || el)
@@ -988,6 +1023,18 @@
     }
   }
 
+  function resetProcessedState() {
+    PROCESSING.clear();
+    PROCESSED_URLS.clear();
+    document.querySelectorAll('[data-userply-done]').forEach((el) => { delete el.dataset.userplyDone; });
+    document.querySelectorAll('[data-userply-processed]').forEach((el) => { el.removeAttribute('data-userply-processed'); });
+    document.querySelectorAll('[data-userply-wrapper], [data-userply]').forEach((el) => el.remove());
+    document.querySelectorAll('[data-userply-sort-date], [data-userply-sortable]').forEach((el) => {
+      el.removeAttribute('data-userply-sort-date');
+      el.removeAttribute('data-userply-sortable');
+    });
+  }
+
   async function boot() {
     if (isDisabledSite()) return;
     await fetchRemoteConfig();
@@ -1001,7 +1048,7 @@
     function onUrlChange() {
       if (location.href === lastHref) return;
       lastHref = location.href;
-      PROCESSING.clear();
+      resetProcessedState();
       scanCount = 0;
       SORT_STATE = SORT_MODE_NORMAL;
       ORIGINAL_ORDER = null;

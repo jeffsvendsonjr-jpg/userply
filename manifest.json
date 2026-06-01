@@ -35,7 +35,11 @@
         "https://www.google.it/*",
         "https://www.google.com.mx/*",
         "https://www.google.nl/*",
-        "https://www.google.pl/*"
+        "https://www.google.pl/*",
+        "https://www.bing.com/*",
+        "https://bing.com/*",
+        "https://duckduckgo.com/*",
+        "https://www.duckduckgo.com/*"
       ],
       "js": [
         "content.js"
